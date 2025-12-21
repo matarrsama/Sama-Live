@@ -48,6 +48,12 @@
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+  // Secret default playlist URL - masked when displayed
+  const SECRET_DEFAULT_URL = "https://iptv-org.github.io/iptv/index.m3u";
+  const MASKED_URL =
+    "********************************************************************"; // 44 asterisks
+  let actualPlaylistUrl = ""; // Store the real URL internally
+
   const state = {
     channels: [],
     favorites: new Set(),
@@ -164,10 +170,15 @@
     const res = await window.api.getSettings();
     state.settings = res.settings || state.settings;
     state.playlistUrl = res.playlistUrl || "";
+    actualPlaylistUrl = state.playlistUrl; // Keep track of real URL internally
     (res.favorites || []).forEach((f) => state.favorites.add(f));
 
-    // populate settings UI
-    $("#playlistUrl").value = state.playlistUrl;
+    // populate settings UI - mask if it's the default URL
+    if (state.playlistUrl === SECRET_DEFAULT_URL) {
+      $("#playlistUrl").value = MASKED_URL;
+    } else {
+      $("#playlistUrl").value = state.playlistUrl;
+    }
     $("#lowBandwidth").checked = !!state.settings.lowBandwidth;
     $("#autoReconnect").checked = !!state.settings.autoReconnect;
     $("#bufferSize").value = state.settings.bufferSeconds || 20;
@@ -334,13 +345,25 @@
     // Try HLS.js first for HLS streams
     if (url.includes(".m3u8") && window.Hls && window.Hls.isSupported()) {
       console.log("Using HLS.js for:", url);
-      hls = new window.Hls({
+
+      // Optimize HLS config based on bandwidth settings
+      const hlsConfig = {
         maxBufferLength: buffer,
         maxMaxBufferLength: buffer * 2,
         startFragPrefetch: true,
-        lowLatencyMode: true,
+        lowLatencyMode: false, // Disable low latency for stability
+        enableWorker: true,
         loader: window.Hls.DefaultConfig.loader,
-      });
+      };
+
+      // More aggressive buffering for low bandwidth mode
+      if (settings.lowBandwidth) {
+        hlsConfig.maxBufferLength = Math.max(buffer, 30);
+        hlsConfig.maxMaxBufferLength = Math.max(buffer * 2, 60);
+        hlsConfig.maxBufferHole = 0.5; // Allow smaller gaps
+      }
+
+      hls = new window.Hls(hlsConfig);
       hls.loadSource(url);
       hls.attachMedia(video);
 
@@ -358,7 +381,8 @@
           console.log("HLS fatal error, trying native playback");
           tryNativePlayback(url);
         } else {
-          handlePlaybackError(data);
+          // Non-fatal errors (like buffer stalls) - just log them
+          console.warn("Non-fatal HLS error, continuing playback");
         }
       });
     } else {
@@ -515,9 +539,13 @@
 
   // Refresh playlist
   $("#refreshBtn").onclick = async () => {
-    const url = $("#playlistUrl").value || state.playlistUrl;
-    if (!url) {
-      showMessage("No playlist URL set in settings", 3000);
+    // Use actualPlaylistUrl (real URL) instead of displayed value (which might be masked)
+    const url = actualPlaylistUrl || state.playlistUrl;
+    if (!url || url.includes("*")) {
+      showMessage(
+        "No valid playlist URL set. Load a URL in settings first.",
+        3000
+      );
       return;
     }
     const btn = $("#refreshBtn");
@@ -549,9 +577,21 @@
     $("#playlistUrl").focus();
   };
   $("#closeSettings").onclick = () => $("#settings").classList.add("hidden");
+
+  // Handle input changes - if user types, show what they typed
+  $("#playlistUrl").addEventListener("input", (e) => {
+    const value = e.target.value;
+    if (value && value !== MASKED_URL) {
+      // User entered their own URL, update actual URL
+      actualPlaylistUrl = value;
+    }
+  });
+
   $("#loadDefaultUrl").onclick = () => {
-    $("#playlistUrl").value = "https://iptv-org.github.io/iptv/index.m3u";
-    showMessage("✓ Default URL loaded", 1500);
+    // Load the secret default URL but display as masked
+    actualPlaylistUrl = SECRET_DEFAULT_URL;
+    $("#playlistUrl").value = MASKED_URL;
+    showMessage("✓ Default playlist loaded", 1500);
   };
   $("#aboutBtn").onclick = () => {
     $("#about").classList.remove("hidden");
@@ -572,7 +612,7 @@
           bufferSeconds: Number($("#bufferSize").value) || 20,
           limitToSD: true,
         },
-        playlistUrl: $("#playlistUrl").value.trim(),
+        playlistUrl: actualPlaylistUrl || $("#playlistUrl").value.trim(),
       };
       console.log("Sending to main process:", payload);
       const result = await window.api.setSettings(payload);
