@@ -1,0 +1,54 @@
+{
+  "name": "streamio-electron",
+  "version": "0.1.0",
+  "description": "A lightweight Electron app for streaming live TV from M3U/M3U8 playlists (Windows)",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.example.streamio",
+    "productName": "Streamio",
+    "files": [
+      "src/**/*",
+      "package.json",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Streamio"
+    }
+  },
+  "author": "Matarr Sama <matarrsama@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/streamio.git"
+  },
+  "dependencies": {
+    "electron-store": "^8.1.0",
+    "hls.js": "^1.6.15",
+    "node-fetch": "^2.6.7"
+  },
+  "devDependencies": {
+    "electron": "^25.0.0",
+    "electron-builder": "^24.6.0"
+  }
+}

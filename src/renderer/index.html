@@ -1,0 +1,127 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; img-src 'self' https: data:; media-src 'self' blob: http: https:; connect-src 'self' http: https:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:;" />
+    <title>Streamio</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+    <div id="app">
+        <aside id="sidebar">
+            <div id="sidebar-top">
+                <input id="search" placeholder="Search channels..." />
+                <button id="refreshBtn">Refresh</button>
+                <button id="settingsBtn">Settings</button>
+            </div>
+            <div id="favorites" class="section">
+                <h3>⭐ Favorites</h3>
+                <ul id="favorites-list" class="channel-list"></ul>
+            </div>
+            <div id="channels" class="section">
+                <h3>Channels</h3>
+                <div id="channels-loading" class="channels-loading hidden">
+                    <div class="spinner-small">Loading...</div>
+                </div>
+                <div id="channel-groups"></div>
+            </div>
+        </aside>
+
+        <main id="main">
+            <div id="topbar">
+                <button id="playBtn">Play</button>
+                <button id="pauseBtn">Pause</button>
+                <button id="stopBtn">Stop</button>
+                <div id="nowplaying"></div>
+                <select id="qualitySelect">
+                    <option value="auto">Auto Quality</option>
+                    <option value="1080p">1080p</option>
+                    <option value="720p">720p</option>
+                    <option value="480p">480p</option>
+                    <option value="360p">360p</option>
+                </select>
+                <button id="themeBtn" title="Toggle Theme">🌙</button>
+                <button id="aboutBtn" title="About">ℹ️</button>
+            </div>
+
+            <div id="player-area">
+                <div id="overlay-spinner" class="hidden">Loading...</div>
+                <video id="video" controls playsinline></video>
+                <div id="player-message" class="message"></div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Disclaimer modal -->
+    <div id="disclaimer" class="modal hidden">
+        <div class="modal-content">
+            <h2>Disclaimer</h2>
+            <p>This app does not bundle any playlists. Please provide your own M3U/M3U8 playlist URL. Streaming may use
+                your internet connection.</p>
+            <button id="dismissDisclaimer">I understand</button>
+        </div>
+    </div>
+
+    <!-- Settings modal -->
+    <div id="settings" class="modal hidden">
+        <div class="modal-content">
+            <h2>Settings</h2>
+            <label>Playlist URL</label>
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <input id="playlistUrl" placeholder="https://example.com/playlist.m3u8" style="flex: 1;" />
+                <button id="loadDefaultUrl" style="padding: 10px 12px; white-space: nowrap;">Load Default</button>
+            </div>
+            <div class="row">
+                <label><input type="checkbox" id="lowBandwidth"> Low bandwidth mode (prefer SD)</label>
+            </div>
+            <div class="row">
+                <label><input type="checkbox" id="autoReconnect"> Auto reconnect</label>
+            </div>
+            <div class="row">
+                <label>Buffer (seconds)</label>
+                <input id="bufferSize" type="number" min="5" max="60" />
+            </div>
+            <div class="row">
+                <button id="clearCache">Clear Cache</button>
+                <button id="importFile">Import Playlist File</button>
+            </div>
+            <div class="row">
+                <button id="saveSettings">Save Settings</button>
+                <button id="closeSettings">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- About modal -->
+    <div id="about" class="modal hidden">
+        <div class="modal-content">
+            <h2>About Streamio</h2>
+            <div class="about-section">
+                <h3>App Information</h3>
+                <p><strong>Name:</strong> Streamio</p>
+                <p><strong>Version:</strong> 0.1.0</p>
+                <p><strong>Description:</strong> A lightweight Electron app for streaming live TV from M3U/M3U8
+                    playlists with offline caching and low-bandwidth support.</p>
+                <p><strong>License:</strong> MIT</p>
+            </div>
+            <div class="about-section">
+                <h3>Developer</h3>
+                <p><strong>Name:</strong> Matarr Sama</p>
+                <p><strong>Email:</strong> <a href="mailto:matarrsama@gmail.com">matarrsama@gmail.com</a></p>
+            </div>
+            <div class="row">
+                <button id="closeAbout">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
+    <script src="renderer.js"></script>
+</body>
+
+</html>
