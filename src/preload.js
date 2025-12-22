@@ -30,3 +30,20 @@ contextBridge.exposeInMainWorld("api", {
     ipcRenderer.on(channel, (e, ...args) => cb(...args));
   },
 });
+
+contextBridge.exposeInMainWorld("electronAPI", {
+  checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
+  startUpdateDownload: () => ipcRenderer.invoke("start-update-download"),
+  installUpdate: () => ipcRenderer.invoke("install-update"),
+  getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+  onUpdateAvailable: (callback) =>
+    ipcRenderer.on("update-available", (event, data) => callback(data)),
+  onUpdateDownloadProgress: (callback) =>
+    ipcRenderer.on("update-download-progress", (event, data) => callback(data)),
+  onUpdateDownloaded: (callback) =>
+    ipcRenderer.on("update-downloaded", () => callback()),
+  onUpdateError: (callback) =>
+    ipcRenderer.on("update-error", (event, data) => callback(data)),
+  onUpdateNotAvailable: (callback) =>
+    ipcRenderer.on("update-not-available", () => callback()),
+});

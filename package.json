@@ -17,6 +17,11 @@
       "package.json",
       "assets/**/*"
     ],
+    "publish": {
+      "provider": "github",
+      "owner": "matarrsama",
+      "repo": "Sama-Live"
+    },
     "win": {
       "target": [
         {
@@ -26,7 +31,12 @@
           ]
         }
       ],
-      "icon": "assets/icon.ico"
+      "icon": "assets/icon.ico",
+      "certificateFile": null,
+      "certificatePassword": null,
+      "signingHashAlgorithms": [
+        "sha256"
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -44,6 +54,7 @@
   },
   "dependencies": {
     "electron-store": "^8.1.0",
+    "electron-updater": "^6.1.0",
     "hls.js": "^1.6.15",
     "node-fetch": "^2.6.7"
   },

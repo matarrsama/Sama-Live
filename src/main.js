@@ -3,6 +3,7 @@ const path = require("path");
 const Store = require("electron-store");
 const fetch = require("node-fetch");
 const fs = require("fs");
+const { autoUpdater } = require("electron-updater");
 
 const store = new Store({
   schema: {
@@ -40,6 +41,64 @@ if (isUninstalling) {
   process.exit(0); // Exit immediately
 }
 
+// Configure Auto-Updater
+function setupAutoUpdater() {
+  // Disable automatic download - we'll prompt user first
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  // Check for updates every hour (3600000 ms)
+  autoUpdater.checkForUpdatesAndNotify();
+
+  // Event: Update available
+  autoUpdater.on("update-available", (info) => {
+    console.log("Update available:", info.version);
+    if (mainWindow) {
+      mainWindow.webContents.send("update-available", {
+        version: info.version,
+        releaseNotes: info.releaseNotes,
+      });
+    }
+  });
+
+  // Event: No updates available
+  autoUpdater.on("update-not-available", () => {
+    console.log("App is up to date");
+    if (mainWindow) {
+      mainWindow.webContents.send("update-not-available");
+    }
+  });
+
+  // Event: Update download started
+  autoUpdater.on("download-progress", (progressObj) => {
+    console.log("Download progress:", progressObj.percent + "%");
+    if (mainWindow) {
+      mainWindow.webContents.send("update-download-progress", {
+        percent: Math.round(progressObj.percent),
+        bytesPerSecond: progressObj.bytesPerSecond,
+      });
+    }
+  });
+
+  // Event: Update downloaded
+  autoUpdater.on("update-downloaded", () => {
+    console.log("Update downloaded - will install on app quit");
+    if (mainWindow) {
+      mainWindow.webContents.send("update-downloaded");
+    }
+  });
+
+  // Event: Error during update
+  autoUpdater.on("error", (error) => {
+    console.error("Updater error:", error);
+    if (mainWindow) {
+      mainWindow.webContents.send("update-error", {
+        message: error.message,
+      });
+    }
+  });
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -73,6 +132,7 @@ app.on("second-instance", () => {
 
 app.whenReady().then(() => {
   createWindow();
+  setupAutoUpdater();
 
   app.on("activate", function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -213,4 +273,37 @@ ipcMain.handle("read-local-file", async (event, filePath) => {
   } catch (err) {
     return { ok: false, error: err.message };
   }
+});
+
+// IPC Handlers for Update Management
+ipcMain.handle("check-for-updates", async () => {
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return {
+      ok: true,
+      updateAvailable: result?.updateInfo ? true : false,
+      version: result?.updateInfo?.version,
+    };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("start-update-download", async () => {
+  try {
+    await autoUpdater.downloadUpdate();
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("install-update", async () => {
+  // Quit and install the update
+  autoUpdater.quitAndInstall(false, true);
+  return { ok: true };
+});
+
+ipcMain.handle("get-app-version", async () => {
+  return { version: app.getVersion() };
 });
