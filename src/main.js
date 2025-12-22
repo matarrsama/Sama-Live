@@ -9,6 +9,7 @@ const store = new Store({
     playlistUrl: { type: "string", default: "" },
     cachedPlaylist: { type: "string", default: "" },
     favorites: { type: "array", default: [] },
+    volume: { type: "number", default: 0.8 },
     settings: {
       type: "object",
       default: {
@@ -24,6 +25,21 @@ const store = new Store({
 
 let mainWindow;
 
+// Handle uninstall - check if NSIS is running uninstaller
+const isUninstalling = process.argv.some(
+  (arg) => arg.includes("uninstall") || arg.includes("--uninstall")
+);
+if (isUninstalling) {
+  // Clear all stored data before app closes
+  try {
+    store.clear();
+    console.log("App data cleared during uninstall");
+  } catch (err) {
+    console.error("Error clearing app data on uninstall:", err.message);
+  }
+  process.exit(0); // Exit immediately
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200,
@@ -38,8 +54,6 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
   // Remove default menu (File, Edit, View, Window, Help)
   Menu.setApplicationMenu(null);
-  // Enable DevTools for debugging
-  mainWindow.webContents.openDevTools();
   // fast startup: show when ready
   mainWindow.once("ready-to-show", () => mainWindow.show());
 }
@@ -60,14 +74,6 @@ app.on("second-instance", () => {
 app.whenReady().then(() => {
   createWindow();
 
-  // show disclaimer on first run
-  if (store.get("firstRun")) {
-    mainWindow.webContents.once("did-finish-load", () => {
-      mainWindow.webContents.send("show-disclaimer");
-    });
-    store.set("firstRun", false);
-  }
-
   app.on("activate", function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
@@ -77,13 +83,45 @@ app.on("window-all-closed", () => {
   if (process.platform !== "darwin") app.quit();
 });
 
+// Additional safeguard: clear data if app is being uninstalled via Control Panel
+app.on("before-quit", (event) => {
+  // If uninstaller is running, clear all data
+  if (isUninstalling) {
+    try {
+      store.clear();
+      console.log("Final cleanup: app data cleared on quit");
+    } catch (err) {
+      console.error("Error during final cleanup:", err.message);
+    }
+  }
+});
+
 /* IPC Handlers */
 ipcMain.handle("get-settings", async () => {
   return {
     settings: store.get("settings"),
     playlistUrl: store.get("playlistUrl"),
     favorites: store.get("favorites"),
+    volume: store.get("volume"),
   };
+});
+
+ipcMain.handle("get-first-run", async () => {
+  return store.get("firstRun");
+});
+
+ipcMain.handle("mark-first-run-complete", async () => {
+  store.set("firstRun", false);
+  return { ok: true };
+});
+
+ipcMain.handle("set-volume", async (event, volume) => {
+  store.set("volume", volume);
+  return { ok: true };
+});
+
+ipcMain.handle("get-volume", async () => {
+  return store.get("volume");
 });
 
 ipcMain.handle("set-settings", async (event, payload) => {
@@ -143,6 +181,18 @@ ipcMain.handle("toggle-favorite", async (event, channelId) => {
   else fav.add(channelId);
   store.set("favorites", Array.from(fav));
   return { favorites: store.get("favorites") };
+});
+
+// Handle app uninstall - clear all cache and user data
+ipcMain.handle("clear-all-app-data", async () => {
+  try {
+    store.clear();
+    console.log("All app data cleared on uninstall");
+    return { ok: true };
+  } catch (err) {
+    console.error("Error clearing app data:", err.message);
+    return { ok: false, error: err.message };
+  }
 });
 
 ipcMain.handle("choose-file-for-playlist", async () => {

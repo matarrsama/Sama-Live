@@ -7,7 +7,7 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta http-equiv="Content-Security-Policy"
         content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; img-src 'self' https: data:; media-src 'self' blob: http: https:; connect-src 'self' http: https:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:;" />
-    <title>Streamio</title>
+    <title>Sama Live</title>
     <link rel="stylesheet" href="style.css" />
 </head>
 
@@ -57,6 +57,45 @@
         </main>
     </div>
 
+    <!-- How to Get Started modal -->
+    <div id="howToStart" class="modal hidden">
+        <div class="modal-content">
+            <h2>Welcome to Sama Live!</h2>
+            <div style="max-height: 400px; overflow-y: auto;">
+                <h3>Getting Started in 3 Steps:</h3>
+                <ol style="line-height: 1.8; font-size: 14px;">
+                    <li>
+                        <strong>Get a Playlist URL:</strong>
+                        <p>You need an M3U/M3U8 playlist file. You can:</p>
+                        <ul>
+                            <li>Use the "Load Default" button in Settings for a pre-configured list</li>
+                            <li>Enter your own playlist URL (IPTV provider, M3U8 link, etc.)</li>
+                            <li>Import a local M3U/M3U8 file using "Import Playlist File"</li>
+                        </ul>
+                    </li>
+                    <li>
+                        <strong>Load the Playlist:</strong>
+                        <p>Click "Settings" → enter or select a playlist URL → click "Load Playlist" to see channels</p>
+                    </li>
+                    <li>
+                        <strong>Start Watching:</strong>
+                        <p>Click any channel to play it. Use Play/Pause/Stop buttons to control playback. Adjust quality
+                            with the dropdown.</p>
+                    </li>
+                </ol>
+                <h3>Pro Tips:</h3>
+                <ul style="font-size: 14px; line-height: 1.6;">
+                    <li>⭐ Click the star icon to add channels to Favorites</li>
+                    <li>🔍 Use Search to quickly find channels</li>
+                    <li>⚙️ Enable "Auto reconnect" in Settings for automatic recovery on connection loss</li>
+                    <li>📊 Enable "Low bandwidth mode" if you have slower internet</li>
+                    <li>🌙 Click the moon icon in the top right to toggle dark/light mode</li>
+                </ul>
+            </div>
+            <button id="startWatching" style="width: 100%; margin-top: 16px;">Start Watching</button>
+        </div>
+    </div>
+
     <!-- Disclaimer modal -->
     <div id="disclaimer" class="modal hidden">
         <div class="modal-content">
@@ -91,9 +130,15 @@
                 <button id="clearCache">Clear Cache</button>
                 <button id="importFile">Import Playlist File</button>
             </div>
+            <div class="load-progress-container hidden">
+                <div class="load-progress-bar"></div>
+            </div>
             <div class="row">
-                <button id="saveSettings">Save Settings</button>
-                <button id="closeSettings">Close</button>
+                <button id="loadPlaylist" style="flex: 1;">Load Playlist</button>
+                <button id="closeSettings" style="flex: 1;">Close</button>
+            </div>
+            <div class="row" style="margin-top: 8px;">
+                <button id="saveSettings" style="flex: 1;">Save Settings</button>
             </div>
         </div>
     </div>
@@ -101,10 +146,10 @@
     <!-- About modal -->
     <div id="about" class="modal hidden">
         <div class="modal-content">
-            <h2>About Streamio</h2>
+            <h2>About Sama Live</h2>
             <div class="about-section">
                 <h3>App Information</h3>
-                <p><strong>Name:</strong> Streamio</p>
+                <p><strong>Name:</strong> Sama Live</p>
                 <p><strong>Version:</strong> 0.1.0</p>
                 <p><strong>Description:</strong> A lightweight Electron app for streaming live TV from M3U/M3U8
                     playlists with offline caching and low-bandwidth support.</p>

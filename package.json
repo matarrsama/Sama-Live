@@ -1,5 +1,5 @@
 {
-  "name": "streamio-electron",
+  "name": "sama-live-electron",
   "version": "0.1.0",
   "description": "A lightweight Electron app for streaming live TV from M3U/M3U8 playlists (Windows)",
   "main": "src/main.js",
@@ -10,8 +10,8 @@
     "dist": "electron-builder"
   },
   "build": {
-    "appId": "com.example.streamio",
-    "productName": "Streamio",
+    "appId": "com.example.sama-live",
+    "productName": "Sama Live",
     "files": [
       "src/**/*",
       "package.json",
@@ -33,7 +33,7 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Streamio"
+      "shortcutName": "Sama Live"
     }
   },
   "author": "Matarr Sama <matarrsama@gmail.com>",

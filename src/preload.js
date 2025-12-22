@@ -11,7 +11,10 @@ try {
 contextBridge.exposeInMainWorld("api", {
   getSettings: () => ipcRenderer.invoke("get-settings"),
   setSettings: (payload) => ipcRenderer.invoke("set-settings", payload),
+  getFirstRun: () => ipcRenderer.invoke("get-first-run"),
+  markFirstRunComplete: () => ipcRenderer.invoke("mark-first-run-complete"),
   clearCache: () => ipcRenderer.invoke("clear-cache"),
+  clearAllAppData: () => ipcRenderer.invoke("clear-all-app-data"),
   getCachedPlaylist: () => ipcRenderer.invoke("get-cached-playlist"),
   saveCachedPlaylist: (text) =>
     ipcRenderer.invoke("save-cached-playlist", text),
@@ -20,6 +23,8 @@ contextBridge.exposeInMainWorld("api", {
   toggleFavorite: (id) => ipcRenderer.invoke("toggle-favorite", id),
   chooseFileForPlaylist: () => ipcRenderer.invoke("choose-file-for-playlist"),
   readLocalFile: (p) => ipcRenderer.invoke("read-local-file", p),
+  setVolume: (vol) => ipcRenderer.invoke("set-volume", vol),
+  getVolume: () => ipcRenderer.invoke("get-volume"),
   Hls: Hls,
   on: (channel, cb) => {
     ipcRenderer.on(channel, (e, ...args) => cb(...args));

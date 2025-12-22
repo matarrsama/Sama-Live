@@ -1,4 +1,4 @@
-// Renderer logic for Streamio
+// Renderer logic for Sama Live
 (function () {
   // Simple M3U parser (same as main parser logic)
   function parseM3U(text) {
@@ -70,10 +70,80 @@
     qualityPreference: "auto",
     availableQualities: [],
     theme: "dark",
+    isOnline: navigator.onLine,
+    connectivityCheckInterval: null,
+    wasPlayingBeforeOffline: false,
+    volume: 0.8, // Default 80%
   };
 
   const video = $("#video");
   let hls = null;
+
+  // Internet connectivity monitoring
+  async function checkInternetConnectivity() {
+    try {
+      // Try to fetch a small, lightweight resource with short timeout
+      const response = await fetch("https://www.google.com/favicon.ico", {
+        method: "HEAD",
+        mode: "no-cors",
+        timeout: 5000,
+      });
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  function startConnectivityMonitoring() {
+    if (state.connectivityCheckInterval) return; // Already monitoring
+
+    console.log("Starting connectivity monitoring");
+    state.connectivityCheckInterval = setInterval(async () => {
+      const isOnline = await checkInternetConnectivity();
+
+      if (isOnline && !state.isOnline) {
+        // Internet is back!
+        console.log("Internet connection restored");
+        state.isOnline = true;
+        showMessage("✓ Internet connection restored", 2000);
+
+        // Auto-resume playback if auto-reconnect is enabled
+        if (
+          state.settings.autoReconnect &&
+          state.wasPlayingBeforeOffline &&
+          state.current
+        ) {
+          console.log("Auto-resuming playback of:", state.current.name);
+          showMessage("Auto-resuming playback...", 2000);
+          setTimeout(() => {
+            startPlayback(state.current.url);
+          }, 1500);
+        }
+      } else if (!isOnline && state.isOnline) {
+        // Internet is down
+        console.log("Internet connection lost");
+        state.isOnline = false;
+        state.wasPlayingBeforeOffline = !video.paused;
+
+        if (state.wasPlayingBeforeOffline) {
+          showMessage(
+            "⚠ Internet connection lost. Waiting for connection...",
+            3000
+          );
+          video.pause();
+          showSpinner(true);
+        }
+      }
+    }, 5000); // Check every 5 seconds
+  }
+
+  function stopConnectivityMonitoring() {
+    if (state.connectivityCheckInterval) {
+      clearInterval(state.connectivityCheckInterval);
+      state.connectivityCheckInterval = null;
+      console.log("Stopped connectivity monitoring");
+    }
+  }
 
   function showSpinner(show) {
     const el = $("#overlay-spinner");
@@ -92,53 +162,156 @@
     el.classList.toggle("hidden", !show);
   }
 
+  // Store groups data for lazy rendering
+  let groupsCache = {};
+  let expandedGroups = new Set();
+
+  function createChannelItem(ch) {
+    const li = document.createElement("li");
+    li.className = "channel-item";
+    li.dataset.id = ch.id;
+    const img = document.createElement("img");
+    img.src = ch.logo || "";
+    img.alt = "";
+    img.onerror = () => (img.style.display = "none");
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.innerHTML = `<div class="name">${escapeHtml(ch.name)}</div>`;
+    const favBtn = document.createElement("button");
+    favBtn.className = "favorite-btn";
+    favBtn.innerHTML = state.favorites.has(ch.id) ? "✓" : "☆";
+    favBtn.classList.toggle("favorited", state.favorites.has(ch.id));
+    favBtn.onclick = (e) => {
+      e.stopPropagation();
+      toggleFavorite(ch.id, favBtn);
+    };
+    li.appendChild(img);
+    li.appendChild(meta);
+    li.appendChild(favBtn);
+    li.onclick = () => selectChannel(ch);
+    return li;
+  }
+
+  function renderGroupChannels(groupName, ul, channels) {
+    ul.innerHTML = ""; // Clear previous
+    const batchSize = 50; // Render in batches to prevent UI freeze
+    let index = 0;
+
+    const renderBatch = () => {
+      const end = Math.min(index + batchSize, channels.length);
+      for (let i = index; i < end; i++) {
+        ul.appendChild(createChannelItem(channels[i]));
+      }
+      index = end;
+      if (index < channels.length) {
+        requestAnimationFrame(renderBatch);
+      }
+    };
+
+    renderBatch();
+  }
+
+  function formatGroupName(groupName) {
+    // Format group name by taking the last meaningful part
+    // "Animation;Classic;Entertainment;Family" -> "Family" with "Animation > Classic > Entertainment >" tooltip
+    if (!groupName || !groupName.includes(";")) {
+      return groupName;
+    }
+
+    const parts = groupName.split(";").filter((p) => p.trim());
+    if (parts.length === 1) {
+      return parts[0];
+    }
+
+    // Return just the last category for display
+    return parts[parts.length - 1];
+  }
+
   function buildList(channels) {
-    const groups = {};
+    groupsCache = {};
     channels.forEach((c) => {
       const g = c.group || "Ungrouped";
-      groups[g] = groups[g] || [];
-      groups[g].push(c);
+      groupsCache[g] = groupsCache[g] || [];
+      groupsCache[g].push(c);
     });
 
     const container = $("#channel-groups");
     container.innerHTML = "";
-    Object.keys(groups)
-      .sort()
-      .forEach((g) => {
-        const groupEl = document.createElement("div");
-        groupEl.className = "group";
-        const h = document.createElement("h4");
-        h.textContent = g;
-        groupEl.appendChild(h);
-        const ul = document.createElement("ul");
-        ul.className = "channel-list";
-        groups[g].forEach((ch) => {
-          const li = document.createElement("li");
-          li.className = "channel-item";
-          li.dataset.id = ch.id;
-          const img = document.createElement("img");
-          img.src = ch.logo || "";
-          img.alt = "";
-          img.onerror = () => (img.style.display = "none");
-          const meta = document.createElement("div");
-          meta.className = "meta";
-          meta.innerHTML = `<div class="name">${escapeHtml(ch.name)}</div>`;
-          const favBtn = document.createElement("button");
-          favBtn.className = "favorite-btn";
-          favBtn.innerHTML = state.favorites.has(ch.id) ? "★" : "☆";
-          favBtn.onclick = (e) => {
-            e.stopPropagation();
-            toggleFavorite(ch.id, favBtn);
-          };
-          li.appendChild(img);
-          li.appendChild(meta);
-          li.appendChild(favBtn);
-          li.onclick = () => selectChannel(ch);
-          ul.appendChild(li);
-        });
-        groupEl.appendChild(ul);
-        container.appendChild(groupEl);
-      });
+
+    const groupNames = Object.keys(groupsCache).sort();
+
+    // For large lists (>1000 channels), default groups to collapsed
+    const shouldCollapse = channels.length > 1000;
+
+    groupNames.forEach((g, index) => {
+      const groupEl = document.createElement("div");
+      groupEl.className = "group";
+      groupEl.dataset.group = g;
+
+      const h = document.createElement("h4");
+      h.className = "group-header";
+
+      // Collapse indicator
+      const isExpanded = expandedGroups.has(g) || !shouldCollapse;
+      const indicator = document.createElement("span");
+      indicator.className = "collapse-indicator";
+      indicator.textContent = isExpanded ? "▼" : "▶";
+
+      const groupNameDisplay = document.createElement("span");
+      groupNameDisplay.style.flex = "1";
+      groupNameDisplay.style.minWidth = "0";
+
+      const displayName = formatGroupName(g);
+      groupNameDisplay.textContent = displayName;
+      groupNameDisplay.title = g; // Full name in tooltip
+
+      const countBadge = document.createElement("span");
+      countBadge.className = "channel-count";
+      countBadge.textContent = groupsCache[g].length;
+
+      h.appendChild(indicator);
+      h.appendChild(groupNameDisplay);
+      h.appendChild(countBadge);
+
+      const ul = document.createElement("ul");
+      ul.className = "channel-list";
+
+      // Initially render only if expanded
+      if (isExpanded) {
+        renderGroupChannels(g, ul, groupsCache[g]);
+      } else {
+        ul.classList.add("hidden");
+      }
+
+      h.onclick = (e) => {
+        const isCurrentlyExpanded = !ul.classList.contains("hidden");
+
+        if (isCurrentlyExpanded) {
+          // Collapse
+          ul.classList.add("hidden");
+          indicator.textContent = "▶";
+          expandedGroups.delete(g);
+        } else {
+          // Expand
+          ul.classList.remove("hidden");
+          indicator.textContent = "▼";
+          expandedGroups.add(g);
+
+          // Render channels only when expanding and list is empty
+          if (ul.innerHTML === "") {
+            renderGroupChannels(g, ul, groupsCache[g]);
+          }
+        }
+      };
+
+      groupEl.appendChild(h);
+      groupEl.appendChild(ul);
+      container.appendChild(groupEl);
+    });
+
+    console.log(
+      `Rendered ${groupNames.length} groups with ${channels.length} total channels`
+    );
   }
 
   function escapeHtml(s) {
@@ -156,8 +329,14 @@
   }
 
   async function loadInitialData() {
+    // Check if this is first run and show how-to guide
+    const isFirstRun = await window.api.getFirstRun();
+    if (isFirstRun) {
+      $("#howToStart").classList.remove("hidden");
+    }
+
     // Load theme preference
-    const savedTheme = localStorage.getItem("streamio_theme") || "dark";
+    const savedTheme = localStorage.getItem("sama-live_theme") || "dark";
     state.theme = savedTheme;
     if (savedTheme === "light") {
       document.documentElement.classList.add("light-mode");
@@ -170,8 +349,12 @@
     const res = await window.api.getSettings();
     state.settings = res.settings || state.settings;
     state.playlistUrl = res.playlistUrl || "";
+    state.volume = res.volume || 0.8; // Load saved volume or default to 80%
     actualPlaylistUrl = state.playlistUrl; // Keep track of real URL internally
     (res.favorites || []).forEach((f) => state.favorites.add(f));
+
+    // Apply saved volume to video element
+    video.volume = state.volume;
 
     // populate settings UI - mask if it's the default URL
     if (state.playlistUrl === SECRET_DEFAULT_URL) {
@@ -189,6 +372,7 @@
     showChannelsLoading(false);
     if (cached) {
       state.channels = parseM3U(cached);
+      buildSearchIndex(); // Build search index once for all channels
       buildList(state.channels);
       buildFavorites();
     }
@@ -198,49 +382,97 @@
     const el = $("#favorites-list");
     el.innerHTML = "";
     const favs = state.channels.filter((c) => state.favorites.has(c.id));
-    favs.forEach((ch) => {
-      const li = document.createElement("li");
-      li.className = "channel-item";
-      li.style.cursor = "pointer";
-      li.style.position = "relative";
-      li.textContent = ch.name + " ";
 
-      // Add remove button (X)
-      const removeBtn = document.createElement("button");
-      removeBtn.textContent = "✕";
-      removeBtn.style.position = "absolute";
-      removeBtn.style.right = "8px";
-      removeBtn.style.top = "50%";
-      removeBtn.style.transform = "translateY(-50%)";
-      removeBtn.style.background = "none";
-      removeBtn.style.border = "none";
-      removeBtn.style.color = "#ff6b6b";
-      removeBtn.style.cursor = "pointer";
-      removeBtn.style.fontSize = "16px";
-      removeBtn.style.padding = "0 4px";
-      removeBtn.onclick = async (e) => {
-        e.stopPropagation();
-        await window.api.toggleFavorite(ch.id);
-        state.favorites.delete(ch.id);
-        buildFavorites();
-      };
-      li.appendChild(removeBtn);
+    // For large favorite lists, limit display to 20 and add "show more" option
+    const displayLimit = 20;
+    const showMore = favs.length > displayLimit;
 
-      li.onclick = () => selectChannel(ch);
+    favs.slice(0, displayLimit).forEach((ch) => {
+      const li = createFavoriteItem(ch);
       el.appendChild(li);
     });
+
+    if (showMore) {
+      const moreBtn = document.createElement("li");
+      moreBtn.className = "channel-item";
+      moreBtn.style.textAlign = "center";
+      moreBtn.textContent = `+ ${favs.length - displayLimit} more`;
+      moreBtn.style.cursor = "pointer";
+      moreBtn.onclick = () => {
+        // Show all favorites
+        el.innerHTML = "";
+        favs.forEach((ch) => {
+          el.appendChild(createFavoriteItem(ch));
+        });
+      };
+      el.appendChild(moreBtn);
+    }
+  }
+
+  function createFavoriteItem(ch) {
+    const li = document.createElement("li");
+    li.className = "channel-item";
+    li.style.cursor = "pointer";
+    li.style.position = "relative";
+    li.textContent = ch.name + " ";
+
+    // Add remove button (X)
+    const removeBtn = document.createElement("button");
+    removeBtn.textContent = "✕";
+    removeBtn.style.position = "absolute";
+    removeBtn.style.right = "8px";
+    removeBtn.style.top = "50%";
+    removeBtn.style.transform = "translateY(-50%)";
+    removeBtn.style.background = "none";
+    removeBtn.style.border = "none";
+    removeBtn.style.color = "#ff6b6b";
+    removeBtn.style.cursor = "pointer";
+    removeBtn.style.fontSize = "16px";
+    removeBtn.style.padding = "0 4px";
+    removeBtn.onclick = async (e) => {
+      e.stopPropagation();
+      await window.api.toggleFavorite(ch.id);
+      state.favorites.delete(ch.id);
+      buildFavorites();
+      // Update the specific channel button instead of rebuilding entire list
+      const channelBtn = $(`[data-id="${ch.id}"] .favorite-btn`);
+      if (channelBtn) {
+        channelBtn.innerHTML = "☆";
+        channelBtn.classList.remove("favorited");
+      }
+    };
+    li.appendChild(removeBtn);
+
+    li.onclick = () => selectChannel(ch);
+    return li;
   }
 
   async function toggleFavorite(id, btnEl) {
     const res = await window.api.toggleFavorite(id);
     state.favorites = new Set(res.favorites || []);
-    btnEl.innerHTML = state.favorites.has(id) ? "★" : "☆";
+    const isFavorited = state.favorites.has(id);
+    btnEl.innerHTML = isFavorited ? "✓" : "☆";
+    btnEl.classList.toggle("favorited", isFavorited);
     buildFavorites();
   }
 
   function selectChannel(ch) {
+    // Clear cached data from previous channel before switching
+    if (state.current && state.current.id !== ch.id) {
+      // Different channel selected - complete cleanup
+      cleanupPlayer(); // This destroys HLS instance
+      clearAllVideoListeners(); // Remove all lingering event listeners
+      clearAllTimeouts(); // Clear any pending timeouts
+      video.src = ""; // Clear video element source
+      video.currentTime = 0; // Reset playback position
+    }
+
     state.current = ch;
+    state.retriesLeft = 3; // Reset retry counter for new channel
     $("#nowplaying").textContent = ch.name;
+    if (state.settings.autoReconnect) {
+      startConnectivityMonitoring();
+    }
     startPlayback(ch.url);
   }
 
@@ -251,6 +483,35 @@
     }
     video.pause();
     video.src = "";
+  }
+
+  // Track all timeouts created during playback so we can clear them
+  let playbackTimeouts = [];
+
+  function createTimeout(fn, delay) {
+    const timeoutId = setTimeout(fn, delay);
+    playbackTimeouts.push(timeoutId);
+    return timeoutId;
+  }
+
+  function clearAllTimeouts() {
+    playbackTimeouts.forEach((id) => clearTimeout(id));
+    playbackTimeouts = [];
+  }
+
+  // Keep track of video event listeners for cleanup
+  let videoListeners = [];
+
+  function addVideoListener(event, handler, options = {}) {
+    video.addEventListener(event, handler, options);
+    videoListeners.push({ event, handler, options });
+  }
+
+  function clearAllVideoListeners() {
+    videoListeners.forEach(({ event, handler, options }) => {
+      video.removeEventListener(event, handler, options);
+    });
+    videoListeners = [];
   }
 
   function applyQualityPreference(url) {
@@ -313,7 +574,11 @@
   }
 
   function startPlayback(url) {
+    // Complete cleanup before starting new playback
     cleanupPlayer();
+    clearAllVideoListeners(); // Remove all lingering event listeners
+    clearAllTimeouts(); // Clear any pending timeouts
+
     showSpinner(true);
     showMessage("");
     state.retriesLeft = 3;
@@ -398,10 +663,9 @@
     video.src = url;
 
     // Set timeout to detect if stream doesn't load
-    const loadTimeout = setTimeout(() => {
+    const loadTimeout = createTimeout(() => {
       if (video.networkState === 0 || video.networkState === 3) {
         console.warn("Stream loading timeout, trying alternate method");
-        clearTimeout(loadTimeout);
         handlePlaybackError({ message: "Stream load timeout" });
       }
     }, 8000);
@@ -417,7 +681,7 @@
       });
     }
 
-    video.addEventListener(
+    addVideoListener(
       "canplay",
       () => {
         console.log("Video can play");
@@ -427,7 +691,7 @@
       { once: true }
     );
 
-    video.addEventListener(
+    addVideoListener(
       "playing",
       () => {
         console.log("Video playing");
@@ -436,13 +700,14 @@
       { once: true }
     );
 
-    video.addEventListener("error", (e) => {
+    addVideoListener("error", (e) => {
       console.error("Video error event:", e.target.error);
       console.error("Video error:", e);
+      clearTimeout(loadTimeout);
       handlePlaybackError(e);
     });
 
-    video.addEventListener("stalled", () => {
+    addVideoListener("stalled", () => {
       showMessage("Buffering...", 2000);
     });
   }
@@ -454,7 +719,7 @@
       showMessage(
         `Playback failed, retrying (${3 - state.retriesLeft + 1})...`
       );
-      setTimeout(() => {
+      createTimeout(() => {
         showSpinner(true);
         attemptLoad(state.current.url);
       }, 1500);
@@ -483,6 +748,7 @@
     if (!video.paused) video.pause();
   };
   $("#stopBtn").onclick = () => {
+    stopConnectivityMonitoring();
     cleanupPlayer();
     showSpinner(false);
     showMessage("Stopped");
@@ -504,12 +770,12 @@
       state.theme = "light";
       html.classList.add("light-mode");
       $("#themeBtn").textContent = "☀️";
-      localStorage.setItem("streamio_theme", "light");
+      localStorage.setItem("sama-live_theme", "light");
     } else {
       state.theme = "dark";
       html.classList.remove("light-mode");
       $("#themeBtn").textContent = "🌙";
-      localStorage.setItem("streamio_theme", "dark");
+      localStorage.setItem("sama-live_theme", "dark");
     }
   }
 
@@ -517,24 +783,48 @@
 
   // Search with debouncing for smooth performance
   let searchTimeout;
+  let searchIndex = {}; // Cache for fast searching
+
+  function buildSearchIndex() {
+    searchIndex = {};
+    state.channels.forEach((ch) => {
+      const key = `${ch.name.toLowerCase()}|${ch.group.toLowerCase()}`;
+      searchIndex[ch.id] = key;
+    });
+  }
+
   $("#search").addEventListener("input", (e) => {
     clearTimeout(searchTimeout);
     const q = e.target.value.toLowerCase().trim();
 
     // If search is empty, show all channels immediately
     if (!q) {
+      expandedGroups.clear(); // Reset to defaults
       buildList(state.channels);
       return;
     }
 
-    // Debounce filtering for non-empty searches (150ms delay)
+    // Debounce filtering for non-empty searches (100ms delay)
     searchTimeout = setTimeout(() => {
-      const filtered = state.channels.filter(
-        (c) =>
-          c.name.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)
+      const filtered = state.channels.filter((c) =>
+        searchIndex[c.id]?.includes(q)
       );
+
+      if (filtered.length === 0) {
+        $("#channel-groups").innerHTML =
+          '<p style="padding: 16px; color: #999;">No channels found</p>';
+        return;
+      }
+
+      // For search results, expand all matching groups
+      expandedGroups.clear();
+      filtered.forEach((c) => {
+        const g = c.group || "Ungrouped";
+        expandedGroups.add(g); // Mark these groups as expanded
+      });
+
       buildList(filtered);
-    }, 150);
+    }, 100);
   });
 
   // Refresh playlist
@@ -605,10 +895,11 @@
     btn.disabled = true;
     try {
       console.log("Gathering settings...");
+      const autoReconnectEnabled = !!$("#autoReconnect").checked;
       const payload = {
         settings: {
           lowBandwidth: !!$("#lowBandwidth").checked,
-          autoReconnect: !!$("#autoReconnect").checked,
+          autoReconnect: autoReconnectEnabled,
           bufferSeconds: Number($("#bufferSize").value) || 20,
           limitToSD: true,
         },
@@ -620,20 +911,22 @@
       if (result && result.ok) {
         state.settings = payload.settings;
         state.playlistUrl = payload.playlistUrl;
+
+        // Stop monitoring if auto-reconnect is disabled
+        if (!autoReconnectEnabled) {
+          stopConnectivityMonitoring();
+        }
+        // Start monitoring if currently playing and auto-reconnect is enabled
+        else if (state.current && !video.paused) {
+          startConnectivityMonitoring();
+        }
+
         showMessage("✓ Settings saved successfully", 2000);
 
         // Close settings modal
         setTimeout(() => {
           $("#settings").classList.add("hidden");
         }, 500);
-
-        // Auto-load channels if URL exists
-        if (payload.playlistUrl) {
-          console.log("Auto-loading channels from:", payload.playlistUrl);
-          setTimeout(() => {
-            autoLoadChannels(payload.playlistUrl);
-          }, 600);
-        }
       } else {
         showMessage("✗ Failed to save settings", 3000);
       }
@@ -686,8 +979,74 @@
     await window.api.clearCache();
     state.channels = [];
     buildList([]);
+    // Note: state.favorites is NOT cleared - favorite IDs are preserved
+    // They will reappear when you reload the playlist
     buildFavorites();
-    showMessage("Cache cleared", 1600);
+    showMessage(
+      "✓ Cache cleared (Favorites preserved - reload playlist to restore)",
+      3000
+    );
+  };
+
+  // Load Playlist button - loads the playlist from the URL
+  $("#loadPlaylist").onclick = async () => {
+    const url = actualPlaylistUrl || $("#playlistUrl").value.trim();
+    if (!url || url.includes("*")) {
+      showMessage(
+        "No valid playlist URL set. Enter a URL in settings first.",
+        3000
+      );
+      return;
+    }
+    const btn = $("#loadPlaylist");
+    const originalText = btn.textContent;
+    const progressContainer = $(".load-progress-container");
+    const progressBar = $(".load-progress-bar");
+
+    btn.disabled = true;
+    btn.textContent = "Loading...";
+
+    // Show and animate progress bar
+    progressContainer.classList.remove("hidden");
+    progressBar.classList.add("loading");
+    progressBar.style.width = "10%";
+
+    showChannelsLoading(true);
+
+    // Simulate progress
+    let progress = 10;
+    const progressInterval = setInterval(() => {
+      progress += Math.random() * 30;
+      if (progress > 90) progress = 90;
+      progressBar.style.width = progress + "%";
+    }, 200);
+
+    const res = await window.api.fetchPlaylist(url);
+
+    clearInterval(progressInterval);
+    showChannelsLoading(false);
+
+    // Complete progress bar
+    progressBar.style.width = "100%";
+    progressBar.classList.remove("loading");
+
+    setTimeout(() => {
+      progressContainer.classList.add("hidden");
+      progressBar.style.width = "0%";
+    }, 500);
+
+    btn.disabled = false;
+    btn.textContent = originalText;
+
+    if (!res.ok) {
+      showMessage("Failed to fetch playlist: " + res.error, 4000);
+      return;
+    }
+    state.channels = parseM3U(res.text);
+    await window.api.saveCachedPlaylist(res.text);
+    buildList(state.channels);
+    buildFavorites();
+    showMessage(`✓ Playlist loaded - ${state.channels.length} channels`, 2000);
   };
 
   $("#importFile").onclick = async () => {
@@ -715,12 +1074,24 @@
     }
   };
 
+  // How to Get Started
+  $("#startWatching").onclick = async () => {
+    $("#howToStart").classList.add("hidden");
+    await window.api.markFirstRunComplete();
+  };
+
   // Disclaimer
   window.api.on("show-disclaimer", () =>
     $("#disclaimer").classList.remove("hidden")
   );
   $("#dismissDisclaimer").onclick = () =>
     $("#disclaimer").classList.add("hidden");
+
+  // Volume persistence
+  video.addEventListener("volumechange", async () => {
+    state.volume = video.volume;
+    await window.api.setVolume(video.volume);
+  });
 
   // load
   loadInitialData();
