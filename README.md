@@ -1,4 +1,4 @@
-# Streamio — Electron M3U/M3U8 TV Player
+# Sama-Live — Electron M3U/M3U8 TV Player
 
 Lightweight Electron app to stream live TV from a user-provided M3U or M3U8 playlist on Windows.
 
