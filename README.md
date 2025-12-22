@@ -123,5 +123,5 @@ Stored data:
 ---
 
 **License**: Proprietary (see LICENSE file for details)  
-**Author**: Matarr Sama (Streamio Developer)  
+**Author**: Matarr Sama (Sama Live Developer)  
 **Contact**: matarrsama@gmail.com
