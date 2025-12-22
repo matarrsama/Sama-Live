@@ -5,11 +5,15 @@ Lightweight Electron app to stream live TV from a user-provided M3U or M3U8 play
 ## Features
 
 - Load playlist from URL or local file
+- **Multiple default playlists**: Choose from IPTV or XUMO with masked URLs for privacy
+- **Fast search**: Find channels by name or group across thousands of channels
 - Cache playlist locally so app opens offline
 - Left sidebar with grouped channels and favorites
 - HTML5 video + hls.js playback with buffering and retry logic
 - Low bandwidth settings and auto-reconnect
+- **Volume persistence**: Remember your preferred volume level (default 80%)
 - Simple, responsive UI with Play/Pause/Stop controls
+- **Optimized for large playlists**: Handles 10,000+ channels smoothly
 
 ## Quick Start
 
@@ -55,13 +59,16 @@ Stored data:
 ## Usage
 
 1. **First Run**: A disclaimer appears on startup.
-2. **Add Playlist**:
+2. **Load Playlist**:
    - Open Settings (gear icon)
-   - Paste a playlist URL or import a local file
-   - Click **Save**
-3. **Refresh**: Click **Refresh** to fetch the latest playlist from your URL
-4. **Playback**: Click a channel to start playback
-5. **Offline**: The app uses cached playlists when offline
+   - Select a default playlist (IPTV or XUMO) from the dropdown, or paste a custom playlist URL
+   - Click **Load Selected** to load your chosen playlist
+   - Or click **Import Playlist File** to load from a local file
+3. **Search**: Use the search box to find channels by name or group
+4. **Refresh**: Click **Refresh** to fetch the latest playlist from your URL
+5. **Playback**: Click a channel to start playback
+6. **Offline**: The app uses cached playlists when offline
+7. **Settings**: Adjust volume, bandwidth mode, buffer size, and auto-reconnect options
 
 ## Architecture
 
@@ -75,8 +82,13 @@ Stored data:
 - **Low Bandwidth**: Prefer SD streams, buffer set to 20 seconds
 - **Auto Retry**: 3 retry attempts on playback failure (configurable)
 - **Offline First**: Cached playlist loads instantly without internet
+- **Search Optimization**: Fast full-text search across all channels
+- **Lazy Loading**: Groups collapse by default for large playlists (1000+ channels)
+- **Performance**: Batch rendering for smooth UI with 10,000+ channels
 - **No Background Polling**: Fetch only on user request
 - **Fast Startup**: Under 3 seconds on typical hardware
+- **Smart Group Management**: Single groups always expanded, multiple groups collapse by default
+- **Volume Persistence**: Audio level remembered across sessions (default 80%)
 
 ## Legal
 
@@ -110,5 +122,6 @@ Stored data:
 
 ---
 
-**License**: MIT  
-**Author**: Streamio Contributors
+**License**: Proprietary (see LICENSE file for details)  
+**Author**: Matarr Sama (Streamio Developer)  
+**Contact**: matarrsama@gmail.com
