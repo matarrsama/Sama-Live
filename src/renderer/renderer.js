@@ -48,11 +48,22 @@
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
-  // Secret default playlist URL - masked when displayed
-  const SECRET_DEFAULT_URL = "https://iptv-org.github.io/iptv/index.m3u";
-  const MASKED_URL =
-    "********************************************************************"; // 44 asterisks
+  // Default playlist options - masked when displayed
+  const PLAYLISTS = {
+    IPTV: {
+      name: "IPTV",
+      url: "https://iptv-org.github.io/iptv/index.m3u",
+      masked: "****" + "*".repeat(60),
+    },
+    XUMO: {
+      name: "XUMO",
+      url: "https://www.apsattv.com/xumo.m3u",
+      masked: "****" + "*".repeat(57),
+    },
+  };
+
   let actualPlaylistUrl = ""; // Store the real URL internally
+  let selectedPlaylist = null; // Track which default playlist is selected
 
   const state = {
     channels: [],
@@ -164,7 +175,8 @@
 
   // Store groups data for lazy rendering
   let groupsCache = {};
-  let expandedGroups = new Set();
+  let expandedGroups = new Set(); // Groups expanded due to user interaction
+  let isSearchActive = false; // Track if search is currently active
 
   function createChannelItem(ch) {
     const li = document.createElement("li");
@@ -242,6 +254,7 @@
 
     // For large lists (>1000 channels), default groups to collapsed
     const shouldCollapse = channels.length > 1000;
+    const isSingleGroup = groupNames.length === 1; // Always expand single groups
 
     groupNames.forEach((g, index) => {
       const groupEl = document.createElement("div");
@@ -252,7 +265,11 @@
       h.className = "group-header";
 
       // Collapse indicator
-      const isExpanded = expandedGroups.has(g) || !shouldCollapse;
+      // Always expand: single groups, search mode, or user-clicked, or small playlists
+      const isExpanded =
+        isSingleGroup || isSearchActive
+          ? true
+          : expandedGroups.has(g) || !shouldCollapse;
       const indicator = document.createElement("span");
       indicator.className = "collapse-indicator";
       indicator.textContent = isExpanded ? "▼" : "▶";
@@ -356,12 +373,23 @@
     // Apply saved volume to video element
     video.volume = state.volume;
 
-    // populate settings UI - mask if it's the default URL
-    if (state.playlistUrl === SECRET_DEFAULT_URL) {
-      $("#playlistUrl").value = MASKED_URL;
-    } else {
+    // populate settings UI - mask if it's a default playlist URL
+    let isDefaultPlaylist = false;
+    for (const [key, playlist] of Object.entries(PLAYLISTS)) {
+      if (state.playlistUrl === playlist.url) {
+        $("#playlistSelect").value = key;
+        $("#playlistUrl").value = playlist.masked;
+        isDefaultPlaylist = true;
+        selectedPlaylist = key;
+        break;
+      }
+    }
+
+    if (!isDefaultPlaylist) {
+      $("#playlistSelect").value = "";
       $("#playlistUrl").value = state.playlistUrl;
     }
+
     $("#lowBandwidth").checked = !!state.settings.lowBandwidth;
     $("#autoReconnect").checked = !!state.settings.autoReconnect;
     $("#bufferSize").value = state.settings.bufferSeconds || 20;
@@ -457,6 +485,12 @@
   }
 
   function selectChannel(ch) {
+    // Remove active class from previously selected channel
+    const prevActive = document.querySelector(".channel-item.active");
+    if (prevActive) {
+      prevActive.classList.remove("active");
+    }
+
     // Clear cached data from previous channel before switching
     if (state.current && state.current.id !== ch.id) {
       // Different channel selected - complete cleanup
@@ -470,6 +504,13 @@
     state.current = ch;
     state.retriesLeft = 3; // Reset retry counter for new channel
     $("#nowplaying").textContent = ch.name;
+
+    // Highlight the selected channel
+    const channelEl = document.querySelector(`[data-id="${ch.id}"]`);
+    if (channelEl) {
+      channelEl.classList.add("active");
+    }
+
     if (state.settings.autoReconnect) {
       startConnectivityMonitoring();
     }
@@ -799,7 +840,7 @@
 
     // If search is empty, show all channels immediately
     if (!q) {
-      expandedGroups.clear(); // Reset to defaults
+      isSearchActive = false;
       buildList(state.channels);
       return;
     }
@@ -816,13 +857,8 @@
         return;
       }
 
-      // For search results, expand all matching groups
-      expandedGroups.clear();
-      filtered.forEach((c) => {
-        const g = c.group || "Ungrouped";
-        expandedGroups.add(g); // Mark these groups as expanded
-      });
-
+      // Mark search as active to show all matching groups expanded
+      isSearchActive = true;
       buildList(filtered);
     }, 100);
   });
@@ -856,6 +892,7 @@
     }
     state.channels = parseM3U(res.text);
     await window.api.saveCachedPlaylist(res.text);
+    buildSearchIndex(); // Rebuild search index for new channels
     buildList(state.channels);
     buildFavorites();
     showMessage(`Playlist refreshed - ${state.channels.length} channels`, 2000);
@@ -871,17 +908,64 @@
   // Handle input changes - if user types, show what they typed
   $("#playlistUrl").addEventListener("input", (e) => {
     const value = e.target.value;
-    if (value && value !== MASKED_URL) {
-      // User entered their own URL, update actual URL
+    let isMasked = false;
+
+    // Check if value matches any masked URL
+    for (const [key, playlist] of Object.entries(PLAYLISTS)) {
+      if (value === playlist.masked) {
+        isMasked = true;
+        break;
+      }
+    }
+
+    if (value && !isMasked) {
+      // User entered their own URL, update actual URL and clear selection
       actualPlaylistUrl = value;
+      selectedPlaylist = null;
+      $("#playlistSelect").value = "";
     }
   });
 
-  $("#loadDefaultUrl").onclick = () => {
-    // Load the secret default URL but display as masked
-    actualPlaylistUrl = SECRET_DEFAULT_URL;
-    $("#playlistUrl").value = MASKED_URL;
-    showMessage("✓ Default playlist loaded", 1500);
+  // Handle playlist dropdown selection
+  $("#playlistSelect").onchange = () => {
+    const selected = $("#playlistSelect").value;
+    if (selected && PLAYLISTS[selected]) {
+      selectedPlaylist = selected;
+      const playlist = PLAYLISTS[selected];
+      $("#playlistUrl").value = playlist.masked;
+    } else {
+      selectedPlaylist = null;
+      $("#playlistUrl").value = "";
+    }
+  };
+
+  // Handle loading selected playlist
+  $("#loadSelectedPlaylist").onclick = async () => {
+    if (!selectedPlaylist || !PLAYLISTS[selectedPlaylist]) {
+      showMessage("⚠ Please select a playlist first", 1500);
+      return;
+    }
+    const playlist = PLAYLISTS[selectedPlaylist];
+    const newUrl = playlist.url;
+    const playlistUrlChanged = newUrl !== state.playlistUrl;
+
+    // Update actualPlaylistUrl for display
+    actualPlaylistUrl = newUrl;
+    $("#playlistUrl").value = playlist.masked;
+
+    // If playlist URL changed, clear old channels and load new ones
+    if (playlistUrlChanged) {
+      state.channels = [];
+      searchIndex = {}; // Clear search index for old channels
+      isSearchActive = false;
+      expandedGroups.clear();
+      buildList([]);
+      buildFavorites();
+      // Auto-load the new playlist
+      await autoLoadChannels(newUrl);
+    }
+
+    showMessage(`✓ ${playlist.name} playlist loaded`, 1500);
   };
   $("#aboutBtn").onclick = () => {
     $("#about").classList.remove("hidden");
@@ -950,6 +1034,7 @@
         if (res.ok) {
           state.channels = parseM3U(res.text);
           await window.api.saveCachedPlaylist(res.text);
+          buildSearchIndex(); // Rebuild search index for new channels
           buildList(state.channels);
           buildFavorites();
           showMessage(`✓ Loaded ${state.channels.length} channels`, 2000);
@@ -989,65 +1074,6 @@
   };
 
   // Load Playlist button - loads the playlist from the URL
-  $("#loadPlaylist").onclick = async () => {
-    const url = actualPlaylistUrl || $("#playlistUrl").value.trim();
-    if (!url || url.includes("*")) {
-      showMessage(
-        "No valid playlist URL set. Enter a URL in settings first.",
-        3000
-      );
-      return;
-    }
-    const btn = $("#loadPlaylist");
-    const originalText = btn.textContent;
-    const progressContainer = $(".load-progress-container");
-    const progressBar = $(".load-progress-bar");
-
-    btn.disabled = true;
-    btn.textContent = "Loading...";
-
-    // Show and animate progress bar
-    progressContainer.classList.remove("hidden");
-    progressBar.classList.add("loading");
-    progressBar.style.width = "10%";
-
-    showChannelsLoading(true);
-
-    // Simulate progress
-    let progress = 10;
-    const progressInterval = setInterval(() => {
-      progress += Math.random() * 30;
-      if (progress > 90) progress = 90;
-      progressBar.style.width = progress + "%";
-    }, 200);
-
-    const res = await window.api.fetchPlaylist(url);
-
-    clearInterval(progressInterval);
-    showChannelsLoading(false);
-
-    // Complete progress bar
-    progressBar.style.width = "100%";
-    progressBar.classList.remove("loading");
-
-    setTimeout(() => {
-      progressContainer.classList.add("hidden");
-      progressBar.style.width = "0%";
-    }, 500);
-
-    btn.disabled = false;
-    btn.textContent = originalText;
-
-    if (!res.ok) {
-      showMessage("Failed to fetch playlist: " + res.error, 4000);
-      return;
-    }
-    state.channels = parseM3U(res.text);
-    await window.api.saveCachedPlaylist(res.text);
-    buildList(state.channels);
-    buildFavorites();
-    showMessage(`✓ Playlist loaded - ${state.channels.length} channels`, 2000);
-  };
 
   $("#importFile").onclick = async () => {
     console.log("Import File clicked!");

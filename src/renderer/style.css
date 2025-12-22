@@ -283,6 +283,12 @@ body {
   box-shadow: -2px 0 0 var(--accent);
 }
 
+.channel-item.active {
+  background: var(--bg-hover);
+  transform: translateX(4px);
+  box-shadow: -2px 0 0 var(--accent);
+}
+
 .channel-item img {
   width: 40px;
   height: 24px;
@@ -293,6 +299,10 @@ body {
 }
 
 .channel-item:hover img {
+  transform: scale(1.05);
+}
+
+.channel-item.active img {
   transform: scale(1.05);
 }
 

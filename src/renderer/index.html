@@ -110,11 +110,20 @@
     <div id="settings" class="modal hidden">
         <div class="modal-content">
             <h2>Settings</h2>
+            <label>Playlist Selection</label>
+            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <select id="playlistSelect"
+                    style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #3a4151; background: #252d3d; color: #fff; font-size: 14px;">
+                    <option value="">Custom URL</option>
+                    <option value="IPTV">IPTV</option>
+                    <option value="XUMO">XUMO</option>
+                </select>
+            </div>
             <label>Playlist URL</label>
             <div style="display: flex; gap: 8px; margin-bottom: 12px;">
                 <input id="playlistUrl" placeholder="https://example.com/playlist.m3u8" style="flex: 1;" />
-                <button id="loadDefaultUrl" style="padding: 10px 12px; white-space: nowrap;"
-                    title="Load secret default playlist">Load Default</button>
+                <button id="loadSelectedPlaylist" style="padding: 10px 12px; white-space: nowrap;"
+                    title="Load selected default playlist">Load Selected</button>
             </div>
             <div class="row">
                 <label><input type="checkbox" id="lowBandwidth"> Low bandwidth mode (prefer SD)</label>
@@ -134,10 +143,7 @@
                 <div class="load-progress-bar"></div>
             </div>
             <div class="row">
-                <button id="loadPlaylist" style="flex: 1;">Load Playlist</button>
                 <button id="closeSettings" style="flex: 1;">Close</button>
-            </div>
-            <div class="row" style="margin-top: 8px;">
                 <button id="saveSettings" style="flex: 1;">Save Settings</button>
             </div>
         </div>
