@@ -918,6 +918,37 @@ body {
   text-align: right;
 }
 
+/* Installation animation */
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin-animation {
+  animation: spin 1s linear infinite;
+}
+
+.update-notification.installing {
+  border-left-color: #ff9800 !important;
+  animation: pulse-border 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-border {
+  0% {
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  }
+  50% {
+    box-shadow: 0 10px 40px rgba(255, 152, 0, 0.4);
+  }
+  100% {
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  }
+}
+
 .update-actions {
   display: flex;
   gap: 10px;

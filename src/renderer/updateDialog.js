@@ -75,6 +75,12 @@ class UpdateDialog {
   }
 
   showUpdateReadyNotification() {
+    // Remove the download notification if it exists
+    const existingNotification = document.querySelector(".update-notification");
+    if (existingNotification) {
+      existingNotification.remove();
+    }
+
     const notification = document.createElement("div");
     notification.className = "update-notification update-notification-ready";
     notification.innerHTML = `
@@ -96,7 +102,9 @@ class UpdateDialog {
     const installBtn = notification.querySelector(".btn-update-install");
     const laterBtn = notification.querySelector(".btn-update-later");
 
-    installBtn.addEventListener("click", () => this.installUpdate());
+    installBtn.addEventListener("click", () =>
+      this.installUpdate(notification)
+    );
     laterBtn.addEventListener("click", () =>
       this.dismissNotification(notification)
     );
@@ -167,7 +175,32 @@ class UpdateDialog {
     }
   }
 
-  installUpdate() {
+  installUpdate(notification) {
+    // Find the install button and show installation state
+    const installBtn = notification.querySelector(".btn-update-install");
+    const icon = notification.querySelector(".update-icon");
+    const title = notification.querySelector(".update-title");
+    const message = notification.querySelector(".update-message");
+    const laterBtn = notification.querySelector(".btn-update-later");
+
+    // Add installing class for animation
+    notification.classList.add("installing");
+    installBtn.disabled = true;
+    laterBtn.disabled = true;
+
+    // Update UI to show installation in progress
+    icon.textContent = "⚙️";
+    icon.classList.add("spin-animation");
+    title.textContent = "Installing Update";
+    message.textContent = "Please wait while the update is being installed...";
+
+    // Disable buttons and show loading state
+    installBtn.style.opacity = "0.6";
+    installBtn.style.cursor = "wait";
+    installBtn.textContent = "Installing...";
+    laterBtn.style.display = "none";
+
+    // Call the install update
     window.electronAPI.installUpdate();
   }
 

@@ -21,10 +21,83 @@ const store = new Store({
       },
     },
     firstRun: { type: "boolean", default: true },
+    lastAppVersion: { type: "string", default: "" },
   },
 });
 
 let mainWindow;
+
+// Helper function to safely delete a file or directory
+function safeDelete(filePath) {
+  try {
+    if (fs.existsSync(filePath)) {
+      const stats = fs.statSync(filePath);
+      if (stats.isDirectory()) {
+        // Recursively delete directory contents
+        fs.rmSync(filePath, { recursive: true, force: true });
+      } else {
+        fs.unlinkSync(filePath);
+      }
+      return true;
+    }
+  } catch (err) {
+    console.warn(`⚠️ Could not delete ${filePath}: ${err.message}`);
+  }
+  return false;
+}
+
+// Handle post-update cleanup
+function handlePostUpdateCleanup() {
+  const currentVersion = app.getVersion();
+  const lastVersion = store.get("lastAppVersion");
+
+  // If version has changed, it means an update was just installed
+  if (lastVersion && lastVersion !== currentVersion) {
+    console.log(
+      `🔄 Update detected: ${lastVersion} -> ${currentVersion}. Running cleanup...`
+    );
+
+    try {
+      // Clear cached playlist to force fresh load with new version
+      store.set("cachedPlaylist", "");
+      console.log("✓ Cleared cached playlist data");
+
+      // Reset buffer settings to defaults (may change between versions)
+      const settings = store.get("settings") || {};
+      settings.bufferSeconds = 20; // Reset to default
+      store.set("settings", settings);
+      console.log("✓ Reset buffer settings to defaults");
+
+      // Clean up temporary files from update process
+      const userDataPath = app.getPath("userData");
+      const tempDirs = [
+        path.join(userDataPath, "pending"),
+        path.join(userDataPath, "temp"),
+        path.join(userDataPath, ".staging"),
+      ];
+
+      tempDirs.forEach((dir) => {
+        if (safeDelete(dir)) {
+          console.log(`✓ Removed temporary directory: ${dir}`);
+        }
+      });
+
+      // Clean up old Electron cache that may be incompatible
+      const cachePath = path.join(userDataPath, "Cache");
+      if (safeDelete(cachePath)) {
+        console.log("✓ Cleared application cache");
+      }
+
+      // Log successful cleanup
+      console.log("✅ Post-update cleanup completed successfully");
+    } catch (err) {
+      console.error("❌ Error during post-update cleanup:", err.message);
+    }
+  }
+
+  // Update stored version to current version
+  store.set("lastAppVersion", currentVersion);
+}
 
 // Handle uninstall - check if NSIS is running uninstaller
 const isUninstalling = process.argv.some(
@@ -133,6 +206,7 @@ app.on("second-instance", () => {
 });
 
 app.whenReady().then(() => {
+  handlePostUpdateCleanup();
   createWindow();
   setupAutoUpdater();
 
