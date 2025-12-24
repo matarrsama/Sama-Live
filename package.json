@@ -1,6 +1,6 @@
 {
   "name": "sama-live-electron",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "A lightweight Electron app for streaming live TV from M3U/M3U8 playlists (Windows)",
   "main": "src/main.js",
   "scripts": {

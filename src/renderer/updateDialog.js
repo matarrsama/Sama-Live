@@ -3,6 +3,7 @@ class UpdateDialog {
   constructor() {
     this.isUpdateAvailable = false;
     this.isDownloading = false;
+    this.isUpdateDownloaded = false;
     this.updateVersion = null;
     this.setupListeners();
   }
@@ -65,7 +66,9 @@ class UpdateDialog {
     const laterBtn = notification.querySelector(".btn-update-later");
     const closeBtn = notification.querySelector(".update-close-btn");
 
-    downloadBtn.addEventListener("click", () => this.downloadUpdate());
+    downloadBtn.addEventListener("click", () =>
+      this.downloadUpdate(notification, downloadBtn, laterBtn)
+    );
     laterBtn.addEventListener("click", () =>
       this.dismissNotification(notification)
     );
@@ -81,6 +84,9 @@ class UpdateDialog {
       existingNotification.remove();
     }
 
+    this.isUpdateDownloaded = true;
+    this.showInstallDownloadedButton();
+
     const notification = document.createElement("div");
     notification.className = "update-notification update-notification-ready";
     notification.innerHTML = `
@@ -89,10 +95,10 @@ class UpdateDialog {
           <span class="update-icon">✅</span>
           <span class="update-title">Update Ready to Install</span>
         </div>
-        <p class="update-message">The update has been downloaded. Restart the app to apply the changes.</p>
+        <p class="update-message">The update has been downloaded. You can install it now or later.</p>
         <div class="update-actions">
-          <button class="btn-update-install">Restart & Install</button>
-          <button class="btn-update-later">Later</button>
+          <button class="btn-update-install">Install Now</button>
+          <button class="btn-update-install-later">Install Later</button>
         </div>
       </div>
     `;
@@ -100,7 +106,7 @@ class UpdateDialog {
 
     // Attach event listeners
     const installBtn = notification.querySelector(".btn-update-install");
-    const laterBtn = notification.querySelector(".btn-update-later");
+    const laterBtn = notification.querySelector(".btn-update-install-later");
 
     installBtn.addEventListener("click", () =>
       this.installUpdate(notification)
@@ -108,6 +114,16 @@ class UpdateDialog {
     laterBtn.addEventListener("click", () =>
       this.dismissNotification(notification)
     );
+  }
+
+  showInstallDownloadedButton() {
+    const installBtn = document.getElementById("installDownloadedUpdateBtn");
+    if (installBtn) {
+      installBtn.style.display = "block";
+      installBtn.addEventListener("click", () => {
+        this.installUpdate(null);
+      });
+    }
   }
 
   showErrorNotification(message) {
@@ -167,38 +183,101 @@ class UpdateDialog {
     }
   }
 
-  async downloadUpdate() {
+  async downloadUpdate(notification, downloadBtn, laterBtn) {
     this.isDownloading = true;
+
+    // Update button texts during download
+    downloadBtn.textContent = "Downloading";
+    downloadBtn.disabled = true;
+    laterBtn.textContent = "Cancel Download";
+
+    // Change later button to cancel download
+    const cancelHandler = () => this.cancelDownload(notification);
+    laterBtn.removeEventListener("click", laterBtn.laterListener);
+    laterBtn.addEventListener("click", cancelHandler);
+    laterBtn.laterListener = cancelHandler;
+
     const result = await window.electronAPI.startUpdateDownload();
     if (!result.ok) {
       console.error("Download failed:", result.error);
+      this.resetDownloadButtons(notification, downloadBtn, laterBtn);
+    }
+  }
+
+  cancelDownload(notification) {
+    this.isDownloading = false;
+    window.electronAPI.cancelUpdateDownload();
+
+    // Reset the buttons and dismiss the notification
+    const downloadBtn = notification.querySelector(".btn-update-download");
+    const laterBtn = notification.querySelector(".btn-update-later");
+
+    if (downloadBtn && laterBtn) {
+      downloadBtn.textContent = "Download & Update";
+      downloadBtn.disabled = false;
+      laterBtn.textContent = "Later";
+    }
+
+    // Clear progress bar if it exists
+    const progressContainer = notification.querySelector(".progress-container");
+    if (progressContainer) {
+      progressContainer.remove();
+    }
+  }
+
+  resetDownloadButtons(notification, downloadBtn, laterBtn) {
+    downloadBtn.textContent = "Download & Update";
+    downloadBtn.disabled = false;
+    laterBtn.textContent = "Later";
+
+    // Clear progress bar if it exists
+    const progressContainer = notification.querySelector(".progress-container");
+    if (progressContainer) {
+      progressContainer.remove();
     }
   }
 
   installUpdate(notification) {
     // Find the install button and show installation state
-    const installBtn = notification.querySelector(".btn-update-install");
-    const icon = notification.querySelector(".update-icon");
-    const title = notification.querySelector(".update-title");
-    const message = notification.querySelector(".update-message");
-    const laterBtn = notification.querySelector(".btn-update-later");
+    const installBtn = notification
+      ? notification.querySelector(".btn-update-install")
+      : document.getElementById("installDownloadedUpdateBtn");
+    const icon = notification
+      ? notification.querySelector(".update-icon")
+      : null;
+    const title = notification
+      ? notification.querySelector(".update-title")
+      : null;
+    const message = notification
+      ? notification.querySelector(".update-message")
+      : null;
+    const laterBtn = notification
+      ? notification.querySelector(".btn-update-install-later")
+      : null;
 
-    // Add installing class for animation
-    notification.classList.add("installing");
+    // Add installing class for animation (only if notification exists)
+    if (notification) {
+      notification.classList.add("installing");
+      laterBtn.disabled = true;
+    }
+
     installBtn.disabled = true;
-    laterBtn.disabled = true;
 
-    // Update UI to show installation in progress
-    icon.textContent = "⚙️";
-    icon.classList.add("spin-animation");
-    title.textContent = "Installing Update";
-    message.textContent = "Please wait while the update is being installed...";
+    // Update UI to show installation in progress (only if notification exists)
+    if (icon) icon.textContent = "⚙️";
+    if (icon) icon.classList.add("spin-animation");
+    if (title) title.textContent = "Installing Update";
+    if (message)
+      message.textContent =
+        "Please wait while the update is being installed...";
 
     // Disable buttons and show loading state
-    installBtn.style.opacity = "0.6";
-    installBtn.style.cursor = "wait";
-    installBtn.textContent = "Installing...";
-    laterBtn.style.display = "none";
+    if (installBtn) {
+      installBtn.style.opacity = "0.6";
+      installBtn.style.cursor = "wait";
+      installBtn.textContent = "Installing...";
+    }
+    if (laterBtn) laterBtn.style.display = "none";
 
     // Call the install update
     window.electronAPI.installUpdate();
