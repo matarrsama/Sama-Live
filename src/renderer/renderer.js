@@ -969,8 +969,51 @@
   };
   $("#aboutBtn").onclick = () => {
     $("#about").classList.remove("hidden");
+    // Display app version
+    window.electronAPI.getAppVersion().then((data) => {
+      $("#appVersion").textContent = data.version;
+    });
   };
   $("#closeAbout").onclick = () => $("#about").classList.add("hidden");
+
+  // Check for updates button
+  if ($("#checkUpdatesBtn")) {
+    $("#checkUpdatesBtn").onclick = async () => {
+      console.log("Manually checking for updates...");
+      const btn = $("#checkUpdatesBtn");
+      const statusEl = $("#updateStatus");
+      const originalText = btn.textContent;
+
+      btn.disabled = true;
+      btn.textContent = "Checking...";
+      statusEl.textContent = "Checking for updates...";
+
+      try {
+        const result = await window.electronAPI.checkForUpdates();
+        console.log("Update check result:", result);
+
+        if (result.ok) {
+          if (result.updateAvailable) {
+            statusEl.textContent = `✓ Update available: v${result.version}`;
+            statusEl.style.color = "#4CAF50";
+          } else {
+            statusEl.textContent = "✓ App is up to date";
+            statusEl.style.color = "#4CAF50";
+          }
+        } else {
+          statusEl.textContent = `✗ Check failed: ${result.error}`;
+          statusEl.style.color = "#f44336";
+        }
+      } catch (err) {
+        console.error("Error checking for updates:", err);
+        statusEl.textContent = `✗ Error: ${err.message}`;
+        statusEl.style.color = "#f44336";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+    };
+  }
   $("#saveSettings").onclick = async () => {
     console.log("Save Settings clicked!");
     const btn = $("#saveSettings");

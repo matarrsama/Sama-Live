@@ -156,7 +156,7 @@
             <div class="about-section">
                 <h3>App Information</h3>
                 <p><strong>Name:</strong> Sama Live</p>
-                <p><strong>Version:</strong> 0.1.0</p>
+                <p><strong>Version:</strong> <span id="appVersion">0.1.0</span></p>
                 <p><strong>Description:</strong> A lightweight Electron app for streaming live TV from M3U/M3U8
                     playlists with offline caching and low-bandwidth support.</p>
                 <p><strong>License:</strong> Proprietary - All rights reserved. Modification and forking require
@@ -166,6 +166,12 @@
                 <h3>Developer</h3>
                 <p><strong>Name:</strong> Matarr Sama</p>
                 <p><strong>Email:</strong> <a href="mailto:matarrsama@gmail.com">matarrsama@gmail.com</a></p>
+            </div>
+            <div class="about-section">
+                <h3>Updates</h3>
+                <button id="checkUpdatesBtn" style="width: 100%; padding: 10px; margin-bottom: 8px;">Check for
+                    Updates</button>
+                <p id="updateStatus" style="font-size: 12px; color: #a0a9b8; margin: 0;">Auto-checks on startup</p>
             </div>
             <div class="row">
                 <button id="closeAbout">Close</button>

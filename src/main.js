@@ -43,16 +43,18 @@ if (isUninstalling) {
 
 // Configure Auto-Updater
 function setupAutoUpdater() {
+  console.log("🔄 Initializing auto-updater...");
   // Disable automatic download - we'll prompt user first
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
   // Check for updates every hour (3600000 ms)
+  console.log("🔍 Checking for updates...");
   autoUpdater.checkForUpdatesAndNotify();
 
   // Event: Update available
   autoUpdater.on("update-available", (info) => {
-    console.log("Update available:", info.version);
+    console.log("✓ Update available:", info.version);
     if (mainWindow) {
       mainWindow.webContents.send("update-available", {
         version: info.version,
@@ -63,7 +65,7 @@ function setupAutoUpdater() {
 
   // Event: No updates available
   autoUpdater.on("update-not-available", () => {
-    console.log("App is up to date");
+    console.log("✓ App is up to date");
     if (mainWindow) {
       mainWindow.webContents.send("update-not-available");
     }
@@ -71,7 +73,7 @@ function setupAutoUpdater() {
 
   // Event: Update download started
   autoUpdater.on("download-progress", (progressObj) => {
-    console.log("Download progress:", progressObj.percent + "%");
+    console.log(`📊 Download progress: ${Math.round(progressObj.percent)}%`);
     if (mainWindow) {
       mainWindow.webContents.send("update-download-progress", {
         percent: Math.round(progressObj.percent),
@@ -82,7 +84,7 @@ function setupAutoUpdater() {
 
   // Event: Update downloaded
   autoUpdater.on("update-downloaded", () => {
-    console.log("Update downloaded - will install on app quit");
+    console.log("✅ Update downloaded - will install on app quit");
     if (mainWindow) {
       mainWindow.webContents.send("update-downloaded");
     }
@@ -90,7 +92,7 @@ function setupAutoUpdater() {
 
   // Event: Error during update
   autoUpdater.on("error", (error) => {
-    console.error("Updater error:", error);
+    console.error("❌ Updater error:", error);
     if (mainWindow) {
       mainWindow.webContents.send("update-error", {
         message: error.message,
@@ -113,6 +115,7 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
   // Remove default menu (File, Edit, View, Window, Help)
   Menu.setApplicationMenu(null);
+  mainWindow.webContents.openDevTools();
   // fast startup: show when ready
   mainWindow.once("ready-to-show", () => mainWindow.show());
 }

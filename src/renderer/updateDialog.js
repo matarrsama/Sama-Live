@@ -10,6 +10,7 @@ class UpdateDialog {
   setupListeners() {
     // Listen for update available
     window.electronAPI.onUpdateAvailable((data) => {
+      console.log("✓ Update available:", data);
       this.isUpdateAvailable = true;
       this.updateVersion = data.version;
       this.showUpdateNotification(data.version);
@@ -17,16 +18,19 @@ class UpdateDialog {
 
     // Listen for download progress
     window.electronAPI.onUpdateDownloadProgress((data) => {
+      console.log(`📊 Download progress: ${data.percent}%`);
       this.updateDownloadProgress(data.percent);
     });
 
     // Listen for update downloaded
     window.electronAPI.onUpdateDownloaded(() => {
+      console.log("✅ Update downloaded and ready to install");
       this.showUpdateReadyNotification();
     });
 
     // Listen for update error
     window.electronAPI.onUpdateError((data) => {
+      console.error("❌ Update error:", data);
       this.showErrorNotification(data.message);
     });
 
