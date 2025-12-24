@@ -49,16 +49,29 @@ class UpdateDialog {
         <div class="update-notification-header">
           <span class="update-icon">⬇️</span>
           <span class="update-title">Update Available</span>
-          <button class="update-close-btn" onclick="updateDialog.dismissNotification(this.parentElement.parentElement)">×</button>
+          <button class="update-close-btn">×</button>
         </div>
         <p class="update-message">Version <strong>${version}</strong> is available. Would you like to download and install it?</p>
         <div class="update-actions">
-          <button class="btn-update-download" onclick="updateDialog.downloadUpdate()">Download & Update</button>
-          <button class="btn-update-later" onclick="updateDialog.dismissNotification(this.parentElement.parentElement)">Later</button>
+          <button class="btn-update-download">Download & Update</button>
+          <button class="btn-update-later">Later</button>
         </div>
       </div>
     `;
     document.body.appendChild(notification);
+
+    // Attach event listeners
+    const downloadBtn = notification.querySelector(".btn-update-download");
+    const laterBtn = notification.querySelector(".btn-update-later");
+    const closeBtn = notification.querySelector(".update-close-btn");
+
+    downloadBtn.addEventListener("click", () => this.downloadUpdate());
+    laterBtn.addEventListener("click", () =>
+      this.dismissNotification(notification)
+    );
+    closeBtn.addEventListener("click", () =>
+      this.dismissNotification(notification)
+    );
   }
 
   showUpdateReadyNotification() {
@@ -72,12 +85,21 @@ class UpdateDialog {
         </div>
         <p class="update-message">The update has been downloaded. Restart the app to apply the changes.</p>
         <div class="update-actions">
-          <button class="btn-update-install" onclick="updateDialog.installUpdate()">Restart & Install</button>
-          <button class="btn-update-later" onclick="updateDialog.dismissNotification(this.parentElement.parentElement)">Later</button>
+          <button class="btn-update-install">Restart & Install</button>
+          <button class="btn-update-later">Later</button>
         </div>
       </div>
     `;
     document.body.appendChild(notification);
+
+    // Attach event listeners
+    const installBtn = notification.querySelector(".btn-update-install");
+    const laterBtn = notification.querySelector(".btn-update-later");
+
+    installBtn.addEventListener("click", () => this.installUpdate());
+    laterBtn.addEventListener("click", () =>
+      this.dismissNotification(notification)
+    );
   }
 
   showErrorNotification(message) {
@@ -88,15 +110,26 @@ class UpdateDialog {
         <div class="update-notification-header">
           <span class="update-icon">⚠️</span>
           <span class="update-title">Update Error</span>
-          <button class="update-close-btn" onclick="updateDialog.dismissNotification(this.parentElement.parentElement)">×</button>
+          <button class="update-close-btn">×</button>
         </div>
         <p class="update-message">${message}</p>
         <div class="update-actions">
-          <button class="btn-update-later" onclick="updateDialog.dismissNotification(this.parentElement.parentElement)">Dismiss</button>
+          <button class="btn-update-later">Dismiss</button>
         </div>
       </div>
     `;
     document.body.appendChild(notification);
+
+    // Attach event listeners
+    const dismissBtn = notification.querySelector(".btn-update-later");
+    const closeBtn = notification.querySelector(".update-close-btn");
+
+    dismissBtn.addEventListener("click", () =>
+      this.dismissNotification(notification)
+    );
+    closeBtn.addEventListener("click", () =>
+      this.dismissNotification(notification)
+    );
   }
 
   updateDownloadProgress(percent) {
