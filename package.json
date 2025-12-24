@@ -44,7 +44,7 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Sama Live",
-      "artifactName": "${productName}-Setup-${version}.exe"
+      "artifactName": "Sama-Live-Setup-${version}.exe"
     }
   },
   "author": "Matarr Sama <matarrsama@gmail.com>",
