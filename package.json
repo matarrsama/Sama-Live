@@ -1,6 +1,6 @@
 {
   "name": "sama-live-electron",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "A lightweight Electron app for streaming live TV from M3U/M3U8 playlists (Windows)",
   "main": "src/main.js",
   "scripts": {
@@ -43,7 +43,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Sama Live"
+      "shortcutName": "Sama Live",
+      "artifactName": "${productName}-Setup-${version}.exe"
     }
   },
   "author": "Matarr Sama <matarrsama@gmail.com>",

@@ -115,7 +115,6 @@ function createWindow() {
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
   // Remove default menu (File, Edit, View, Window, Help)
   Menu.setApplicationMenu(null);
-  mainWindow.webContents.openDevTools();
   // fast startup: show when ready
   mainWindow.once("ready-to-show", () => mainWindow.show());
 }
