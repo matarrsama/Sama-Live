@@ -117,8 +117,6 @@ function createWindow() {
   Menu.setApplicationMenu(null);
   // fast startup: show when ready
   mainWindow.once("ready-to-show", () => mainWindow.show());
-  // Enable DevTools for debugging
-  mainWindow.webContents.openDevTools();
 }
 
 // Single instance

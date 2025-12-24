@@ -974,7 +974,11 @@
       $("#appVersion").textContent = data.version;
     });
   };
-  $("#closeAbout").onclick = () => $("#about").classList.add("hidden");
+  $("#closeAboutX").onclick = () => $("#about").classList.add("hidden");
+  // Keep legacy close button handler for backwards compatibility
+  if ($("#closeAbout")) {
+    $("#closeAbout").onclick = () => $("#about").classList.add("hidden");
+  }
 
   // Check for updates button
   if ($("#checkUpdatesBtn")) {

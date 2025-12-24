@@ -168,7 +168,10 @@
     <!-- About modal -->
     <div id="about" class="modal hidden">
         <div class="modal-content">
-            <h2>About Sama Live</h2>
+            <div class="modal-header">
+                <h2>About Sama Live</h2>
+                <button id="closeAboutX" class="modal-close-btn" title="Close">✕</button>
+            </div>
             <div class="about-section">
                 <h3>App Information</h3>
                 <p><strong>Name:</strong> Sama Live</p>
@@ -188,9 +191,6 @@
                 <button id="checkUpdatesBtn" style="width: 100%; padding: 10px; margin-bottom: 8px;">Check for
                     Updates</button>
                 <p id="updateStatus" style="font-size: 12px; color: #a0a9b8; margin: 0;">Auto-checks on startup</p>
-            </div>
-            <div class="row">
-                <button id="closeAbout">Close</button>
             </div>
         </div>
     </div>
