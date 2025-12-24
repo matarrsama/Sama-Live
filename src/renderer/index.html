@@ -34,9 +34,15 @@
 
         <main id="main">
             <div id="topbar">
-                <button id="playBtn">Play Now</button>
+                <button id="playBtn">Play</button>
                 <button id="pauseBtn">Pause</button>
                 <button id="stopBtn">Stop</button>
+                <div id="volumeControlNav" class="volume-control-nav">
+                    <button id="volumeBtnNav" class="volume-btn-nav" title="Volume">🔊</button>
+                    <div id="volumePanelNav" class="volume-panel-nav hidden">
+                        <input id="volumeSliderNav" type="range" min="0" max="100" class="volume-slider-nav" />
+                    </div>
+                </div>
                 <div id="nowplaying"></div>
                 <select id="qualitySelect">
                     <option value="auto">Auto Quality</option>
@@ -53,6 +59,16 @@
                 <div id="overlay-spinner" class="hidden">Loading...</div>
                 <video id="video" controls playsinline></video>
                 <div id="player-message" class="message"></div>
+
+                <!-- Custom Volume Control for Tablet -->
+                <div id="volumeControl" class="volume-control hidden">
+                    <button id="volumeBtn" class="volume-btn" title="Mute/Unmute">🔊</button>
+                    <div id="volumePanel" class="volume-panel hidden">
+                        <button id="volumeDownBtn" class="volume-adjust-btn" title="Volume Down">−</button>
+                        <input id="volumeSlider" type="range" min="0" max="100" class="volume-slider" />
+                        <button id="volumeUpBtn" class="volume-adjust-btn" title="Volume Up">+</button>
+                    </div>
+                </div>
             </div>
         </main>
     </div>

@@ -1149,6 +1149,78 @@
     await window.api.markFirstRunComplete();
   };
 
+  // Tablet-friendly Volume Control
+  const volumeControl = $("#volumeControl");
+  const volumeBtn = $("#volumeBtn");
+  const volumePanel = $("#volumePanel");
+  const volumeSlider = $("#volumeSlider");
+  const volumeUpBtn = $("#volumeUpBtn");
+  const volumeDownBtn = $("#volumeDownBtn");
+
+  // Navbar Volume Control
+  const volumeBtnNav = $("#volumeBtnNav");
+  const volumePanelNav = $("#volumePanelNav");
+  const volumeSliderNav = $("#volumeSliderNav");
+  let volumeAutoCollapseTimeout;
+
+  // Initialize volume slider with current volume
+  const updateVolumeSlider = () => {
+    if (volumeSlider) volumeSlider.value = Math.round(video.volume * 100);
+    volumeSliderNav.value = Math.round(video.volume * 100);
+  };
+
+  // Auto-collapse navbar volume panel after 5 seconds
+  const autoCollapseVolumePanel = () => {
+    clearTimeout(volumeAutoCollapseTimeout);
+    volumeAutoCollapseTimeout = setTimeout(() => {
+      volumePanelNav.classList.add("hidden");
+      navPanelOpen = false;
+    }, 5000);
+  };
+
+  // Show volume panel on button click
+  let navPanelOpen = false;
+  volumeBtnNav.addEventListener("click", (e) => {
+    e.stopPropagation();
+    navPanelOpen = !navPanelOpen;
+    if (navPanelOpen) {
+      volumePanelNav.classList.remove("hidden");
+      updateVolumeSlider();
+      autoCollapseVolumePanel();
+    } else {
+      volumePanelNav.classList.add("hidden");
+      clearTimeout(volumeAutoCollapseTimeout);
+    }
+  });
+
+  // Close navbar volume panel when clicking outside
+  document.addEventListener("click", (e) => {
+    if (!$("#volumeControlNav").contains(e.target) && navPanelOpen) {
+      volumePanelNav.classList.add("hidden");
+      navPanelOpen = false;
+      clearTimeout(volumeAutoCollapseTimeout);
+    }
+  });
+
+  // Volume slider control (navbar)
+  volumeSliderNav.addEventListener("input", (e) => {
+    const newVolume = e.target.value / 100;
+    video.volume = newVolume;
+    navPanelOpen = true; // Keep panel open while adjusting
+    // Update icon based on volume
+    if (newVolume === 0) {
+      volumeBtnNav.textContent = "🔇";
+    } else if (newVolume < 0.3) {
+      volumeBtnNav.textContent = "🔈";
+    } else if (newVolume < 0.7) {
+      volumeBtnNav.textContent = "🔉";
+    } else {
+      volumeBtnNav.textContent = "🔊";
+    }
+    // Reset auto-collapse timer on slider interaction
+    autoCollapseVolumePanel();
+  });
+
   // Disclaimer
   window.api.on("show-disclaimer", () =>
     $("#disclaimer").classList.remove("hidden")
