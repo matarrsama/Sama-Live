@@ -20,11 +20,19 @@
                 <button id="settingsBtn">Settings</button>
             </div>
             <div id="favorites" class="section">
-                <h3>⭐ Favorites</h3>
+                <div class="favorites-header">
+                    <h3 class="section-header">
+                        <span class="section-toggle">▼</span>
+                        ⭐ Favorites
+                    </h3>
+                    <button id="sidebarToggle" class="sidebar-toggle" title="Toggle Sidebar">&lt;</button>
+                </div>
                 <ul id="favorites-list" class="channel-list"></ul>
             </div>
             <div id="channels" class="section">
-                <h3>Channels</h3>
+                <div class="channels-header">
+                    <h3>Channels</h3>
+                </div>
                 <div id="channels-loading" class="channels-loading hidden">
                     <div class="spinner-small">Loading....</div>
                 </div>
@@ -57,6 +65,12 @@
 
             <div id="player-area">
                 <div id="overlay-spinner" class="hidden">Loading...</div>
+                <div id="player-welcome" class="player-welcome">
+                    <div class="welcome-content">
+                        <h2>👋 Welcome to Sama Live</h2>
+                        <p>Select a channel from the sidebar to start watching</p>
+                    </div>
+                </div>
                 <video id="video" controls playsinline></video>
                 <div id="player-message" class="message"></div>
 

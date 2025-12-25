@@ -68,6 +68,7 @@
   const state = {
     channels: [],
     favorites: new Set(),
+    favoriteOrder: [], // Track order of added favorites (newest first)
     settings: {
       lowBandwidth: true,
       autoReconnect: false,
@@ -370,6 +371,9 @@
     actualPlaylistUrl = state.playlistUrl; // Keep track of real URL internally
     (res.favorites || []).forEach((f) => state.favorites.add(f));
 
+    // Initialize favorite order (reverse of current favorites for newest-first display)
+    state.favoriteOrder = (res.favorites || []).slice().reverse();
+
     // Apply saved volume to video element
     video.volume = state.volume;
 
@@ -411,6 +415,22 @@
     el.innerHTML = "";
     const favs = state.channels.filter((c) => state.favorites.has(c.id));
 
+    // Sort by newest added - items in favoriteOrder come first (in reverse), then others
+    favs.sort((a, b) => {
+      const aIndex = state.favoriteOrder.indexOf(a.id);
+      const bIndex = state.favoriteOrder.indexOf(b.id);
+
+      // If both are in order, sort by order (newest first)
+      if (aIndex !== -1 && bIndex !== -1) {
+        return bIndex - aIndex; // Reverse order (newest first)
+      }
+      // If only one is in order, it comes first
+      if (aIndex !== -1) return -1;
+      if (bIndex !== -1) return 1;
+      // Otherwise keep original order
+      return 0;
+    });
+
     // For large favorite lists, limit display to 20 and add "show more" option
     const displayLimit = 20;
     const showMore = favs.length > displayLimit;
@@ -440,23 +460,23 @@
   function createFavoriteItem(ch) {
     const li = document.createElement("li");
     li.className = "channel-item";
-    li.style.cursor = "pointer";
-    li.style.position = "relative";
-    li.textContent = ch.name + " ";
+    li.dataset.id = ch.id;
+
+    // Add logo
+    const img = document.createElement("img");
+    img.src = ch.logo || "";
+    img.alt = "";
+    img.onerror = () => (img.style.display = "none");
+
+    // Add metadata container
+    const meta = document.createElement("div");
+    meta.className = "meta";
+    meta.innerHTML = `<div class="name">${escapeHtml(ch.name)}</div>`;
 
     // Add remove button (X)
     const removeBtn = document.createElement("button");
     removeBtn.textContent = "✕";
-    removeBtn.style.position = "absolute";
-    removeBtn.style.right = "8px";
-    removeBtn.style.top = "50%";
-    removeBtn.style.transform = "translateY(-50%)";
-    removeBtn.style.background = "none";
-    removeBtn.style.border = "none";
-    removeBtn.style.color = "#ff6b6b";
-    removeBtn.style.cursor = "pointer";
-    removeBtn.style.fontSize = "16px";
-    removeBtn.style.padding = "0 4px";
+    removeBtn.className = "favorite-remove-btn";
     removeBtn.onclick = async (e) => {
       e.stopPropagation();
       await window.api.toggleFavorite(ch.id);
@@ -469,8 +489,10 @@
         channelBtn.classList.remove("favorited");
       }
     };
-    li.appendChild(removeBtn);
 
+    li.appendChild(img);
+    li.appendChild(meta);
+    li.appendChild(removeBtn);
     li.onclick = () => selectChannel(ch);
     return li;
   }
@@ -479,6 +501,19 @@
     const res = await window.api.toggleFavorite(id);
     state.favorites = new Set(res.favorites || []);
     const isFavorited = state.favorites.has(id);
+
+    // Track the order of favorites (newest first)
+    if (isFavorited) {
+      // Add to the beginning of the order array (newest)
+      state.favoriteOrder = [
+        id,
+        ...state.favoriteOrder.filter((fId) => fId !== id),
+      ];
+    } else {
+      // Remove from order array
+      state.favoriteOrder = state.favoriteOrder.filter((fId) => fId !== id);
+    }
+
     btnEl.innerHTML = isFavorited ? "✓" : "☆";
     btnEl.classList.toggle("favorited", isFavorited);
     buildFavorites();
@@ -504,6 +539,12 @@
     state.current = ch;
     state.retriesLeft = 3; // Reset retry counter for new channel
     $("#nowplaying").textContent = ch.name;
+
+    // Hide welcome message when a channel is selected
+    const welcomeMsg = $("#player-welcome");
+    if (welcomeMsg) {
+      welcomeMsg.classList.add("hidden");
+    }
 
     // Highlight the selected channel
     const channelEl = document.querySelector(`[data-id="${ch.id}"]`);
@@ -821,6 +862,66 @@
   }
 
   $("#themeBtn").onclick = toggleTheme;
+
+  // Favorites collapse/expand toggle
+  const favoritesSection = $("#favorites");
+  const favoritesList = $("#favorites-list");
+  const sectionHeader = document.querySelector("#favorites .section-header");
+  const sectionToggle = document.querySelector("#favorites .section-toggle");
+
+  // Load collapsed state from localStorage
+  let favoritesCollapsed =
+    localStorage.getItem("sama-live_favorites_collapsed") === "true";
+
+  function updateFavoritesUI() {
+    if (favoritesCollapsed) {
+      favoritesList.style.display = "none";
+      sectionToggle.textContent = "▶";
+    } else {
+      favoritesList.style.display = "";
+      sectionToggle.textContent = "▼";
+    }
+  }
+
+  sectionHeader.style.cursor = "pointer";
+  sectionHeader.onclick = () => {
+    favoritesCollapsed = !favoritesCollapsed;
+    localStorage.setItem("sama-live_favorites_collapsed", favoritesCollapsed);
+    updateFavoritesUI();
+  };
+
+  updateFavoritesUI();
+
+  // Sidebar collapse/expand toggle
+  const sidebar = $("#sidebar");
+  const sidebarToggle = $("#sidebarToggle");
+  const app = $("#app");
+
+  // Load sidebar collapsed state from localStorage
+  let sidebarCollapsed =
+    localStorage.getItem("sama-live_sidebar_collapsed") === "true";
+
+  function updateSidebarUI() {
+    if (sidebarCollapsed) {
+      sidebar.classList.add("collapsed");
+      app.classList.add("sidebar-collapsed");
+      sidebarToggle.textContent = ">";
+      sidebarToggle.title = "Show Sidebar";
+    } else {
+      sidebar.classList.remove("collapsed");
+      app.classList.remove("sidebar-collapsed");
+      sidebarToggle.textContent = "<";
+      sidebarToggle.title = "Hide Sidebar";
+    }
+  }
+
+  sidebarToggle.onclick = () => {
+    sidebarCollapsed = !sidebarCollapsed;
+    localStorage.setItem("sama-live_sidebar_collapsed", sidebarCollapsed);
+    updateSidebarUI();
+  };
+
+  updateSidebarUI();
 
   // Search with debouncing for smooth performance
   let searchTimeout;

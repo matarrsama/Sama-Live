@@ -58,10 +58,6 @@ function handlePostUpdateCleanup() {
     );
 
     try {
-      // Clear cached playlist to force fresh load with new version
-      store.set("cachedPlaylist", "");
-      console.log("✓ Cleared cached playlist data");
-
       // Reset buffer settings to defaults (may change between versions)
       const settings = store.get("settings") || {};
       settings.bufferSeconds = 20; // Reset to default
