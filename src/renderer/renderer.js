@@ -1042,20 +1042,16 @@
 
   // Handle loading selected playlist
   $("#loadSelectedPlaylist").onclick = async () => {
-    if (!selectedPlaylist || !PLAYLISTS[selectedPlaylist]) {
-      showMessage("⚠ Please select a playlist first", 1500);
-      return;
-    }
-    const playlist = PLAYLISTS[selectedPlaylist];
-    const newUrl = playlist.url;
-    const playlistUrlChanged = newUrl !== state.playlistUrl;
+    // Check if a preset playlist is selected from dropdown
+    if (selectedPlaylist && PLAYLISTS[selectedPlaylist]) {
+      const playlist = PLAYLISTS[selectedPlaylist];
+      const newUrl = playlist.url;
 
-    // Update actualPlaylistUrl for display
-    actualPlaylistUrl = newUrl;
-    $("#playlistUrl").value = playlist.masked;
+      // Update actualPlaylistUrl for display
+      actualPlaylistUrl = newUrl;
+      $("#playlistUrl").value = playlist.masked;
 
-    // If playlist URL changed, clear old channels and load new ones
-    if (playlistUrlChanged) {
+      // Clear old channels and load new ones
       state.channels = [];
       searchIndex = {}; // Clear search index for old channels
       isSearchActive = false;
@@ -1064,9 +1060,24 @@
       buildFavorites();
       // Auto-load the new playlist
       await autoLoadChannels(newUrl);
-    }
+    } else {
+      // Use custom URL from input field
+      const customUrl = $("#playlistUrl").value.trim();
+      if (!customUrl) {
+        showMessage("⚠ Please enter a playlist URL", 1500);
+        return;
+      }
 
-    showMessage(`✓ ${playlist.name} playlist loaded`, 1500);
+      actualPlaylistUrl = customUrl;
+      state.channels = [];
+      searchIndex = {}; // Clear search index for old channels
+      isSearchActive = false;
+      expandedGroups.clear();
+      buildList([]);
+      buildFavorites();
+      // Auto-load the custom URL playlist
+      await autoLoadChannels(customUrl);
+    }
   };
   $("#aboutBtn").onclick = () => {
     $("#about").classList.remove("hidden");
@@ -1173,39 +1184,63 @@
 
   async function autoLoadChannels(url, retries = 3) {
     showChannelsLoading(true);
+    showMessage("Loading playlist...");
+
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        console.log(`Fetching channels (attempt ${attempt}/${retries})...`);
+        console.log(
+          `Fetching channels (attempt ${attempt}/${retries}) from ${url}...`
+        );
         const res = await window.api.fetchPlaylist(url);
-        showChannelsLoading(false);
+        console.log(`Fetch response received:`, res);
 
-        if (res.ok) {
-          state.channels = parseM3U(res.text);
+        if (res.ok && res.text) {
+          console.log(`Parse attempt - received ${res.text.length} bytes`);
+          const parsedChannels = parseM3U(res.text);
+          console.log(`Parsed ${parsedChannels.length} channels from playlist`);
+
+          if (parsedChannels.length === 0) {
+            throw new Error("Playlist appears to be empty or invalid");
+          }
+
+          state.channels = parsedChannels;
           await window.api.saveCachedPlaylist(res.text);
           buildSearchIndex(); // Rebuild search index for new channels
           buildList(state.channels);
           buildFavorites();
+          showChannelsLoading(false);
           showMessage(`✓ Loaded ${state.channels.length} channels`, 2000);
+          console.log(
+            `✓ Successfully loaded ${state.channels.length} channels`
+          );
           return;
         } else {
+          const errorMsg = res.error || "Unknown error";
+          console.error(
+            `Fetch failed (attempt ${attempt}/${retries}): ${errorMsg}`
+          );
+
           if (attempt < retries) {
-            console.log(`Fetch failed, retrying... (${attempt}/${retries})`);
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            console.log(`Retrying in 2 seconds... (${attempt}/${retries})`);
+            await new Promise((resolve) => setTimeout(resolve, 2000));
           }
         }
       } catch (err) {
-        console.error(`Error fetching channels (attempt ${attempt}):`, err);
+        console.error(
+          `Error fetching channels (attempt ${attempt}/${retries}):`,
+          err
+        );
         if (attempt < retries) {
-          await new Promise((resolve) => setTimeout(resolve, 1000));
+          console.log(`Retrying in 2 seconds...`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       }
     }
 
     showChannelsLoading(false);
-    showMessage(
-      "✗ Failed to load channels after " + retries + " attempts",
-      3000
-    );
+    const errorMsg = "✗ Failed to load channels after " + retries + " attempts";
+    showMessage(errorMsg, 3000);
+    console.error(errorMsg);
   }
 
   $("#clearCache").onclick = async () => {
