@@ -50,6 +50,7 @@ class UpdateDialog {
         <div class="update-notification-header">
           <span class="update-icon">⬇️</span>
           <span class="update-title">Update Available</span>
+          <button class="update-minimize-btn" title="Minimize" style="display: none;">↓</button>
           <button class="update-close-btn">×</button>
         </div>
         <p class="update-message">Version <strong>${version}</strong> is available. Would you like to download and install it?</p>
@@ -65,9 +66,10 @@ class UpdateDialog {
     const downloadBtn = notification.querySelector(".btn-update-download");
     const laterBtn = notification.querySelector(".btn-update-later");
     const closeBtn = notification.querySelector(".update-close-btn");
+    const minimizeBtn = notification.querySelector(".update-minimize-btn");
 
     downloadBtn.addEventListener("click", () =>
-      this.downloadUpdate(notification, downloadBtn, laterBtn)
+      this.downloadUpdate(notification, downloadBtn, laterBtn, minimizeBtn)
     );
     laterBtn.addEventListener("click", () =>
       this.dismissNotification(notification)
@@ -94,6 +96,7 @@ class UpdateDialog {
         <div class="update-notification-header">
           <span class="update-icon">✅</span>
           <span class="update-title">Update Ready to Install</span>
+          <button class="update-minimize-btn" title="Minimize" style="display: none;">↓</button>
         </div>
         <p class="update-message">The update has been downloaded. You can install it now or later.</p>
         <div class="update-actions">
@@ -107,6 +110,7 @@ class UpdateDialog {
     // Attach event listeners
     const installBtn = notification.querySelector(".btn-update-install");
     const laterBtn = notification.querySelector(".btn-update-install-later");
+    const minimizeBtn = notification.querySelector(".update-minimize-btn");
 
     installBtn.addEventListener("click", () =>
       this.installUpdate(notification)
@@ -114,6 +118,13 @@ class UpdateDialog {
     laterBtn.addEventListener("click", () =>
       this.dismissNotification(notification)
     );
+
+    if (minimizeBtn) {
+      minimizeBtn.style.display = "flex";
+      minimizeBtn.addEventListener("click", () =>
+        this.minimizeDownloadWindow(notification)
+      );
+    }
   }
 
   showInstallDownloadedButton() {
@@ -183,13 +194,21 @@ class UpdateDialog {
     }
   }
 
-  async downloadUpdate(notification, downloadBtn, laterBtn) {
+  async downloadUpdate(notification, downloadBtn, laterBtn, minimizeBtn) {
     this.isDownloading = true;
 
     // Update button texts during download
     downloadBtn.textContent = "Downloading";
     downloadBtn.disabled = true;
     laterBtn.textContent = "Cancel Download";
+
+    // Show minimize button
+    if (minimizeBtn) {
+      minimizeBtn.style.display = "flex";
+      minimizeBtn.addEventListener("click", () =>
+        this.minimizeDownloadWindow(notification)
+      );
+    }
 
     // Change later button to cancel download
     const cancelHandler = () => this.cancelDownload(notification);
@@ -285,6 +304,34 @@ class UpdateDialog {
 
   dismissNotification(element) {
     element.remove();
+  }
+
+  minimizeDownloadWindow(notification) {
+    // Hide the notification while keeping download running
+    notification.classList.add("minimized");
+
+    // Show a small indicator in the corner that can restore the window
+    this.showMinimizedIndicator(notification);
+  }
+
+  showMinimizedIndicator(notification) {
+    // Check if indicator already exists
+    if (document.querySelector(".update-minimized-indicator")) {
+      return;
+    }
+
+    const indicator = document.createElement("div");
+    indicator.className = "update-minimized-indicator";
+    indicator.innerHTML = `
+      <button class="restore-btn" title="Show Update Window">⬆️ Update Downloading...</button>
+    `;
+    document.body.appendChild(indicator);
+
+    const restoreBtn = indicator.querySelector(".restore-btn");
+    restoreBtn.addEventListener("click", () => {
+      notification.classList.remove("minimized");
+      indicator.remove();
+    });
   }
 }
 
