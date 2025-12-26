@@ -68,7 +68,7 @@
                 <div id="player-welcome" class="player-welcome">
                     <div class="welcome-content">
                         <h2>👋 Welcome to Sama Live</h2>
-                        <p>Select a channel from the sidebar to start watching</p><img src="../assets/icon.ico" alt="Sama Live Logo" style="width: 120px; height: 120px; margin-top: 20px; border-radius: 12px;">
+                        <p>Select a channel from the sidebar to start watching</p>
                     </div>
                 </div>
                 <video id="video" controls playsinline></video>

@@ -859,19 +859,11 @@
     if (!video.paused) video.pause();
   };
   $("#stopBtn").onclick = () => {
-  stopConnectivityMonitoring();
-  cleanupPlayer();
-  showSpinner(false);
-  
-  // Reset to fresh start state
-  state.current = null;
-  state.retriesLeft = 3;
-  $("#nowplaying").textContent = "";
-  $("#player-welcome").classList.remove("hidden");
-  video.src = "";
-  
-  showMessage("Stopped");
-};
+    stopConnectivityMonitoring();
+    cleanupPlayer();
+    showSpinner(false);
+    showMessage("Stopped");
+  };
 
   // Quality selector
   $("#qualitySelect").onchange = (e) => {
@@ -1416,5 +1408,3 @@
   // load
   loadInitialData();
 })();
-
-
