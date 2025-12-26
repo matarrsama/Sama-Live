@@ -6,7 +6,7 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; img-src 'self' https: data:; media-src 'self' blob: http: https:; connect-src 'self' http: https:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:;" />
+        content="default-src 'self'; script-src 'self' https://cdn.jsdelivr.net; img-src 'self' https: data: file:; media-src 'self' blob: http: https:; connect-src 'self' http: https:; style-src 'self' 'unsafe-inline'; worker-src 'self' blob:;" />
     <title>Sama Live</title>
     <link rel="stylesheet" href="style.css" />
 </head>
@@ -65,10 +65,17 @@
 
             <div id="player-area">
                 <div id="overlay-spinner" class="hidden">Loading...</div>
+                <div id="buffering-indicator" class="hidden">
+                    <div id="buffering-title">Buffering…</div>
+                    <div id="buffering-subtitle"></div>
+                    <div id="buffering-progress">
+                        <div id="buffering-progress-fill"></div>
+                    </div>
+                </div>
                 <div id="player-welcome" class="player-welcome">
                     <div class="welcome-content">
                         <h2>👋 Welcome to Sama Live</h2>
-                        <p>Select a channel from the sidebar to start watching</p><img src="../assets/icon.ico" alt="Sama Live Logo" style="width: 120px; height: 120px; margin-top: 20px; border-radius: 12px;">
+                        <p>Select a channel from the sidebar to start watching</p><img src="../../assets/icon.ico" alt="Sama Live Logo" style="width: 120px; height: 120px; margin-top: 20px; border-radius: 12px;">
                     </div>
                 </div>
                 <video id="video" controls playsinline></video>

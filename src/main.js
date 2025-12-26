@@ -2,7 +2,9 @@ const { app, BrowserWindow, ipcMain, dialog, Menu } = require("electron");
 const path = require("path");
 const Store = require("electron-store");
 const fetch = require("node-fetch");
+const crypto = require("crypto");
 const fs = require("fs");
+const { pathToFileURL } = require("url");
 const { autoUpdater } = require("electron-updater");
 
 const store = new Store({
@@ -342,6 +344,101 @@ ipcMain.handle("read-local-file", async (event, filePath) => {
     // save cached copy
     store.set("cachedPlaylist", text);
     return { ok: true, text };
+  } catch (err) {
+    return { ok: false, error: err.message };
+  }
+});
+
+ipcMain.handle("get-cached-logo", async (event, logoUrl) => {
+  try {
+    if (typeof logoUrl !== "string" || !logoUrl.trim()) {
+      return { ok: false, error: "Invalid URL" };
+    }
+
+    let parsed;
+    try {
+      parsed = new URL(logoUrl);
+    } catch {
+      return { ok: false, error: "Invalid URL" };
+    }
+
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return { ok: false, error: "Unsupported protocol" };
+    }
+
+    const userDataPath = app.getPath("userData");
+    const logosDir = path.join(userDataPath, "logos");
+    if (!fs.existsSync(logosDir)) {
+      fs.mkdirSync(logosDir, { recursive: true });
+    }
+
+    const hash = crypto.createHash("sha1").update(logoUrl).digest("hex");
+    const urlExt = path.extname(parsed.pathname || "").toLowerCase();
+    const allowedExt = new Set([
+      ".png",
+      ".jpg",
+      ".jpeg",
+      ".gif",
+      ".webp",
+      ".svg",
+      ".ico",
+    ]);
+    const ext = allowedExt.has(urlExt) ? urlExt : ".img";
+    const cachedPath = path.join(logosDir, `${hash}${ext}`);
+
+    if (fs.existsSync(cachedPath)) {
+      return { ok: true, url: pathToFileURL(cachedPath).toString() };
+    }
+
+    const res = await fetch(logoUrl, {
+      timeout: 20000,
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        Accept: "image/*,*/*;q=0.8",
+      },
+      redirect: "follow",
+    });
+
+    if (!res.ok) {
+      return { ok: false, error: `HTTP ${res.status}: ${res.statusText}` };
+    }
+
+    const contentLength = Number(res.headers.get("content-length") || 0);
+    if (contentLength && contentLength > 5 * 1024 * 1024) {
+      return { ok: true, url: logoUrl };
+    }
+
+    const buf = await res.buffer();
+    if (!buf || !buf.length) {
+      return { ok: false, error: "Empty response" };
+    }
+    if (buf.length > 5 * 1024 * 1024) {
+      return { ok: true, url: logoUrl };
+    }
+
+    let finalPath = cachedPath;
+    if (ext === ".img") {
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      const type = ct.split(";")[0].trim();
+      const map = {
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/gif": ".gif",
+        "image/webp": ".webp",
+        "image/svg+xml": ".svg",
+        "image/x-icon": ".ico",
+        "image/vnd.microsoft.icon": ".ico",
+      };
+      const mapped = map[type];
+      if (mapped) {
+        finalPath = path.join(logosDir, `${hash}${mapped}`);
+      }
+    }
+
+    fs.writeFileSync(finalPath, buf);
+    return { ok: true, url: pathToFileURL(finalPath).toString() };
   } catch (err) {
     return { ok: false, error: err.message };
   }

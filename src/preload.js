@@ -19,6 +19,7 @@ contextBridge.exposeInMainWorld("api", {
   saveCachedPlaylist: (text) =>
     ipcRenderer.invoke("save-cached-playlist", text),
   fetchPlaylist: (url) => ipcRenderer.invoke("fetch-playlist", url),
+  getCachedLogo: (url) => ipcRenderer.invoke("get-cached-logo", url),
   getFavorites: () => ipcRenderer.invoke("get-favorites"),
   toggleFavorite: (id) => ipcRenderer.invoke("toggle-favorite", id),
   chooseFileForPlaylist: () => ipcRenderer.invoke("choose-file-for-playlist"),

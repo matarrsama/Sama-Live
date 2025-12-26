@@ -48,6 +48,19 @@
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+  const VIRTUALIZE_THRESHOLD = Math.max(
+    0,
+    Number(localStorage.getItem("sama-live_virtual_threshold")) || 10000
+  );
+  const VIRTUAL_ITEM_HEIGHT = 56;
+  const VIRTUAL_OVERSCAN = 8;
+  const TRANSPARENT_PIXEL =
+    "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
+
+  const logoUrlToCachedUrl = new Map();
+  let logoObserver = null;
+  let virtualCleanupFns = [];
+
   // Default playlist options - masked when displayed
   const PLAYLISTS = {
     IPTV: {
@@ -162,6 +175,124 @@
     el.classList.toggle("hidden", !show);
   }
 
+  let bufferingInterval = null;
+  let bufferingStartTs = 0;
+  let bufferingStartAhead = 0;
+
+  function clearBufferingIndicator() {
+    if (bufferingInterval) {
+      clearInterval(bufferingInterval);
+      bufferingInterval = null;
+    }
+    const container = $("#buffering-indicator");
+    if (container) container.classList.add("hidden");
+    const fill = $("#buffering-progress-fill");
+    if (fill) fill.style.width = "0%";
+    const subtitle = $("#buffering-subtitle");
+    if (subtitle) subtitle.textContent = "";
+  }
+
+  function getBufferedAheadSeconds() {
+    try {
+      const t = video.currentTime;
+      const ranges = video.buffered;
+      if (!ranges || ranges.length === 0 || !isFinite(t)) return 0;
+      for (let i = 0; i < ranges.length; i++) {
+        const start = ranges.start(i);
+        const end = ranges.end(i);
+        if (t >= start && t <= end) {
+          return Math.max(0, end - t);
+        }
+      }
+      return 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  function estimateSecondsRemaining(targetAhead, currentAhead) {
+    const remaining = Math.max(0, targetAhead - currentAhead);
+    if (remaining <= 0) return 0;
+
+    const elapsed = (Date.now() - bufferingStartTs) / 1000;
+    const gained = Math.max(0, currentAhead - bufferingStartAhead);
+    if (elapsed >= 0.75 && gained > 0.25) {
+      const rate = gained / elapsed;
+      if (rate > 0) return Math.max(0, remaining / rate);
+    }
+    return remaining;
+  }
+
+  function showBufferingIndicator(reason = "Buffering") {
+    const container = $("#buffering-indicator");
+    if (!container) return;
+
+    container.classList.remove("hidden");
+    const title = $("#buffering-title");
+    if (title) title.textContent = `${reason}…`;
+
+    if (!bufferingInterval) {
+      bufferingStartTs = Date.now();
+      bufferingStartAhead = getBufferedAheadSeconds();
+      bufferingInterval = setInterval(() => {
+        const target = Number(state.settings.bufferSeconds) || 20;
+        const ahead = getBufferedAheadSeconds();
+        const remaining = estimateSecondsRemaining(target, ahead);
+
+        const subtitle = $("#buffering-subtitle");
+        if (subtitle) {
+          subtitle.textContent = `${ahead.toFixed(1)}s buffered • ~${Math.ceil(
+            remaining
+          )}s remaining`;
+        }
+
+        const fill = $("#buffering-progress-fill");
+        if (fill) {
+          const pct = target > 0 ? Math.max(0, Math.min(1, ahead / target)) : 0;
+          fill.style.width = `${Math.round(pct * 100)}%`;
+        }
+
+        if (!video.paused && !video.ended && ahead >= target && video.readyState >= 3) {
+          clearBufferingIndicator();
+        }
+      }, 200);
+    }
+  }
+
+  function hideBufferingIndicator() {
+    clearBufferingIndicator();
+  }
+
+  function attachBufferingVideoListeners() {
+    addVideoListener("waiting", () => {
+      showBufferingIndicator("Buffering");
+    });
+
+    addVideoListener("stalled", () => {
+      showBufferingIndicator("Buffering");
+    });
+
+    addVideoListener(
+      "canplay",
+      () => {
+        hideBufferingIndicator();
+      },
+      { once: true }
+    );
+
+    addVideoListener(
+      "playing",
+      () => {
+        hideBufferingIndicator();
+      },
+      { once: true }
+    );
+
+    addVideoListener("seeking", () => {
+      showBufferingIndicator("Seeking");
+    });
+  }
+
   function showMessage(text, timeout = 4000) {
     const el = $("#player-message");
     el.textContent = text;
@@ -180,14 +311,98 @@
   let expandedGroupsOrder = []; // Track order of expanded groups to limit to 2
   let isSearchActive = false; // Track if search is currently active
 
+  function cleanupVirtualLists() {
+    if (!virtualCleanupFns.length) return;
+    virtualCleanupFns.forEach((fn) => {
+      try {
+        fn();
+      } catch (e) {
+        console.warn("Virtual list cleanup failed", e);
+      }
+    });
+    virtualCleanupFns = [];
+  }
+
+  function getLogoObserver() {
+    if (logoObserver) return logoObserver;
+    const root = $("#sidebar") || null;
+    logoObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          const img = entry.target;
+          logoObserver.unobserve(img);
+          const url = img.dataset.logoUrl;
+          if (url) loadLogoIntoImg(img, url);
+        }
+      },
+      {
+        root,
+        rootMargin: "400px 0px",
+        threshold: 0.01,
+      }
+    );
+    return logoObserver;
+  }
+
+  async function resolveLogoUrl(logoUrl) {
+    if (!logoUrl) return "";
+    if (logoUrl.startsWith("data:")) return logoUrl;
+
+    if (logoUrlToCachedUrl.has(logoUrl)) {
+      return await logoUrlToCachedUrl.get(logoUrl);
+    }
+
+    const p = (async () => {
+      try {
+        if (window.api && typeof window.api.getCachedLogo === "function") {
+          const res = await window.api.getCachedLogo(logoUrl);
+          if (res && res.ok && res.url) return res.url;
+        }
+      } catch (e) {
+        return logoUrl;
+      }
+      return logoUrl;
+    })();
+
+    logoUrlToCachedUrl.set(logoUrl, p);
+    return await p;
+  }
+
+  async function loadLogoIntoImg(img, logoUrl) {
+    try {
+      const resolved = await resolveLogoUrl(logoUrl);
+      if (img.dataset.logoUrl !== logoUrl) return;
+      img.src = resolved || "";
+    } catch (e) {
+      if (img.dataset.logoUrl === logoUrl) img.src = logoUrl;
+    }
+  }
+
+  function setupLazyLogo(img, logoUrl) {
+    img.dataset.logoUrl = logoUrl || "";
+    img.decoding = "async";
+    img.loading = "lazy";
+    img.src = TRANSPARENT_PIXEL;
+    img.alt = "";
+    img.onerror = () => (img.style.display = "none");
+    if (!logoUrl) {
+      img.style.display = "none";
+      return;
+    }
+    try {
+      getLogoObserver().observe(img);
+    } catch {
+      loadLogoIntoImg(img, logoUrl);
+    }
+  }
+
   function createChannelItem(ch) {
     const li = document.createElement("li");
     li.className = "channel-item";
     li.dataset.id = ch.id;
     const img = document.createElement("img");
-    img.src = ch.logo || "";
-    img.alt = "";
-    img.onerror = () => (img.style.display = "none");
+    setupLazyLogo(img, ch.logo || "");
     const meta = document.createElement("div");
     meta.className = "meta";
     meta.innerHTML = `<div class="name">${escapeHtml(ch.name)}</div>`;
@@ -207,10 +422,28 @@
   }
 
   function renderGroupChannels(groupName, ul, channels) {
-    ul.innerHTML = ""; // Clear previous
-    const batchSize = 50; // Render in batches to prevent UI freeze
-    let index = 0;
+    ul.innerHTML = "";
+    ul.classList.remove("virtual-list");
+    ul.style.height = "";
+    ul.style.position = "";
+    ul.style.paddingTop = "";
+    ul.style.paddingBottom = "";
+    if (ul.__virtualCleanup) {
+      try {
+        ul.__virtualCleanup();
+      } catch (e) {
+        console.warn("Virtual cleanup failed", e);
+      }
+      ul.__virtualCleanup = null;
+    }
 
+    if (channels.length >= VIRTUALIZE_THRESHOLD) {
+      renderVirtualGroupChannels(groupName, ul, channels);
+      return;
+    }
+
+    const batchSize = 50;
+    let index = 0;
     const renderBatch = () => {
       const end = Math.min(index + batchSize, channels.length);
       for (let i = index; i < end; i++) {
@@ -221,8 +454,78 @@
         requestAnimationFrame(renderBatch);
       }
     };
-
     renderBatch();
+  }
+
+  function renderVirtualGroupChannels(groupName, ul, channels) {
+    const sidebar = $("#sidebar");
+    if (!sidebar) {
+      for (let i = 0; i < channels.length; i++) {
+        ul.appendChild(createChannelItem(channels[i]));
+      }
+      return;
+    }
+
+    ul.classList.add("virtual-list");
+    ul.style.position = "relative";
+    ul.style.height = `${channels.length * VIRTUAL_ITEM_HEIGHT}px`;
+
+    let rafScheduled = false;
+    let lastRangeKey = "";
+
+    const computeRange = () => {
+      const sidebarRect = sidebar.getBoundingClientRect();
+      const ulRect = ul.getBoundingClientRect();
+      const ulTopInSidebar = ulRect.top - sidebarRect.top + sidebar.scrollTop;
+      const viewTop = sidebar.scrollTop;
+      const viewBottom = sidebar.scrollTop + sidebar.clientHeight;
+      const start = Math.max(
+        0,
+        Math.floor((viewTop - ulTopInSidebar) / VIRTUAL_ITEM_HEIGHT) -
+          VIRTUAL_OVERSCAN
+      );
+      const end = Math.min(
+        channels.length,
+        Math.ceil((viewBottom - ulTopInSidebar) / VIRTUAL_ITEM_HEIGHT) +
+          VIRTUAL_OVERSCAN
+      );
+      return { start, end };
+    };
+
+    const render = () => {
+      rafScheduled = false;
+      const { start, end } = computeRange();
+      const rangeKey = `${start}:${end}`;
+      if (rangeKey === lastRangeKey) return;
+      lastRangeKey = rangeKey;
+
+      ul.innerHTML = "";
+      const frag = document.createDocumentFragment();
+      for (let i = start; i < end; i++) {
+        const li = createChannelItem(channels[i]);
+        li.style.position = "absolute";
+        li.style.top = `${i * VIRTUAL_ITEM_HEIGHT}px`;
+        li.style.left = "0";
+        li.style.right = "0";
+        frag.appendChild(li);
+      }
+      ul.appendChild(frag);
+    };
+
+    const onScrollOrResize = () => {
+      if (rafScheduled) return;
+      rafScheduled = true;
+      requestAnimationFrame(render);
+    };
+
+    sidebar.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize);
+    ul.__virtualCleanup = () => {
+      sidebar.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+    virtualCleanupFns.push(ul.__virtualCleanup);
+    render();
   }
 
   function formatGroupName(groupName) {
@@ -242,6 +545,7 @@
   }
 
   function buildList(channels) {
+    cleanupVirtualLists();
     groupsCache = {};
     channels.forEach((c) => {
       const g = c.group || "Ungrouped";
@@ -307,6 +611,14 @@
 
         if (isCurrentlyExpanded) {
           // Collapse
+          if (ul.__virtualCleanup) {
+            try {
+              ul.__virtualCleanup();
+            } catch (err) {
+              console.warn("Virtual cleanup failed", err);
+            }
+            ul.__virtualCleanup = null;
+          }
           ul.classList.add("hidden");
           indicator.textContent = "▶";
           expandedGroups.delete(g);
@@ -594,6 +906,7 @@
     }
     video.pause();
     video.src = "";
+    clearBufferingIndicator();
   }
 
   // Track all timeouts created during playback so we can clear them
@@ -623,6 +936,7 @@
       video.removeEventListener(event, handler, options);
     });
     videoListeners = [];
+    clearBufferingIndicator();
   }
 
   function applyQualityPreference(url) {
@@ -691,6 +1005,7 @@
     clearAllTimeouts(); // Clear any pending timeouts
 
     showSpinner(true);
+    hideBufferingIndicator();
     showMessage("");
     state.retriesLeft = 3;
     attemptLoad(url);
@@ -721,6 +1036,9 @@
     // Try HLS.js first for HLS streams
     if (url.includes(".m3u8") && window.Hls && window.Hls.isSupported()) {
       console.log("Using HLS.js for:", url);
+
+      showBufferingIndicator("Loading");
+      attachBufferingVideoListeners();
 
       // Optimize HLS config based on bandwidth settings
       const hlsConfig = {
@@ -759,6 +1077,15 @@
         } else {
           // Non-fatal errors (like buffer stalls) - just log them
           console.warn("Non-fatal HLS error, continuing playback");
+
+          const details = String(data && data.details ? data.details : "");
+          if (
+            details.includes("BUFFER_STALLED") ||
+            details.includes("BUFFER_NUDGE") ||
+            details.includes("FRAG_LOAD")
+          ) {
+            showBufferingIndicator("Buffering");
+          }
         }
       });
     } else {
@@ -772,6 +1099,9 @@
     console.log("Starting native playback:", url);
     cleanupPlayer();
     video.src = url;
+
+    showBufferingIndicator("Loading");
+    attachBufferingVideoListeners();
 
     // Set timeout to detect if stream doesn't load
     const loadTimeout = createTimeout(() => {
@@ -819,12 +1149,13 @@
     });
 
     addVideoListener("stalled", () => {
-      showMessage("Buffering...", 2000);
+      showBufferingIndicator("Buffering");
     });
   }
 
   function handlePlaybackError(data) {
     showSpinner(false);
+    hideBufferingIndicator();
     state.retriesLeft = (state.retriesLeft || 3) - 1;
     if (state.retriesLeft > 0 && state.settings.autoReconnect) {
       showMessage(
@@ -862,6 +1193,7 @@
   stopConnectivityMonitoring();
   cleanupPlayer();
   showSpinner(false);
+  hideBufferingIndicator();
   
   // Reset to fresh start state
   state.current = null;
