@@ -177,6 +177,7 @@
   // Store groups data for lazy rendering
   let groupsCache = {};
   let expandedGroups = new Set(); // Groups expanded due to user interaction
+  let expandedGroupsOrder = []; // Track order of expanded groups to limit to 2
   let isSearchActive = false; // Track if search is currently active
 
   function createChannelItem(ch) {
@@ -309,16 +310,44 @@
           ul.classList.add("hidden");
           indicator.textContent = "▶";
           expandedGroups.delete(g);
+          expandedGroupsOrder = expandedGroupsOrder.filter(
+            (group) => group !== g
+          );
         } else {
-          // Expand
+          // Expand - but only allow 1 open group at a time
+          // Close any previously open group
+          if (expandedGroups.size > 0) {
+            const previousGroup = expandedGroupsOrder[0];
+            // Find and collapse the previous group
+            const prevGroupEl = document.querySelector(
+              `.group[data-group="${previousGroup}"]`
+            );
+            if (prevGroupEl) {
+              const prevUl = prevGroupEl.querySelector(".channel-list");
+              const prevIndicator = prevGroupEl.querySelector(
+                ".collapse-indicator"
+              );
+              if (prevUl && prevIndicator) {
+                prevUl.classList.add("hidden");
+                prevIndicator.textContent = "▶";
+              }
+            }
+            expandedGroups.delete(previousGroup);
+          }
+
+          // Now expand the new group
           ul.classList.remove("hidden");
           indicator.textContent = "▼";
           expandedGroups.add(g);
+          expandedGroupsOrder = [g]; // Only keep the current group in the order
 
           // Render channels only when expanding and list is empty
           if (ul.innerHTML === "") {
             renderGroupChannels(g, ul, groupsCache[g]);
           }
+
+          // Auto-scroll to the group header
+          h.scrollIntoView({ behavior: "smooth", block: "center" });
         }
       };
 
@@ -1056,6 +1085,7 @@
       searchIndex = {}; // Clear search index for old channels
       isSearchActive = false;
       expandedGroups.clear();
+      expandedGroupsOrder = [];
       buildList([]);
       buildFavorites();
       // Auto-load the new playlist
@@ -1073,6 +1103,7 @@
       searchIndex = {}; // Clear search index for old channels
       isSearchActive = false;
       expandedGroups.clear();
+      expandedGroupsOrder = [];
       buildList([]);
       buildFavorites();
       // Auto-load the custom URL playlist
