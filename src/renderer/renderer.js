@@ -1457,15 +1457,76 @@
       $("#appVersion").textContent = data.version;
     });
   };
-  $("#closeAboutX").onclick = () => $("#about").classList.add("hidden");
+  $("#closeAboutX").onclick = () => {
+    $("#about").classList.add("hidden");
+    // Hide developer tools section when closing about page
+    $("#devToolsSection").style.display = "none";
+    updateClickCount = 0; // Reset click counter
+    if (clickTimeout) {
+      clearTimeout(clickTimeout);
+      clickTimeout = null;
+    }
+  };
   // Keep legacy close button handler for backwards compatibility
   if ($("#closeAbout")) {
-    $("#closeAbout").onclick = () => $("#about").classList.add("hidden");
+    $("#closeAbout").onclick = () => {
+      $("#about").classList.add("hidden");
+      // Hide developer tools section when closing about page
+      $("#devToolsSection").style.display = "none";
+      updateClickCount = 0; // Reset click counter
+      if (clickTimeout) {
+        clearTimeout(clickTimeout);
+        clickTimeout = null;
+      }
+    };
   }
+
+  // Open developer tools button
+  if ($("#openDevToolsBtn")) {
+    $("#openDevToolsBtn").onclick = async () => {
+      console.log("Opening developer tools...");
+      try {
+        const result = await window.electronAPI.openDevTools();
+        if (!result.ok) {
+          console.error("Failed to open dev tools:", result.error);
+        }
+      } catch (err) {
+        console.error("Error opening dev tools:", err);
+      }
+    };
+  }
+
+  // Developer tools unlock counter
+  let updateClickCount = 0;
+  let clickTimeout = null;
+  const DEV_TOOLS_CLICK_THRESHOLD = 5;
+  const CLICK_RESET_TIMEOUT = 2000; // 2 seconds
 
   // Check for updates button
   if ($("#checkUpdatesBtn")) {
     $("#checkUpdatesBtn").onclick = async () => {
+      // Clear existing timeout
+      if (clickTimeout) {
+        clearTimeout(clickTimeout);
+      }
+      
+      // Increment click counter for dev tools unlock
+      updateClickCount++;
+      
+      if (updateClickCount >= DEV_TOOLS_CLICK_THRESHOLD) {
+        $("#devToolsSection").style.display = "block";
+        updateClickCount = 0; // Reset counter
+        if (clickTimeout) {
+          clearTimeout(clickTimeout);
+          clickTimeout = null;
+        }
+      } else {
+        // Set timeout to reset counter if not rapid enough
+        clickTimeout = setTimeout(() => {
+          updateClickCount = 0;
+          clickTimeout = null;
+        }, CLICK_RESET_TIMEOUT);
+      }
       console.log("Manually checking for updates...");
       const btn = $("#checkUpdatesBtn");
       const statusEl = $("#updateStatus");

@@ -487,3 +487,12 @@ ipcMain.handle("install-update", async () => {
 ipcMain.handle("get-app-version", async () => {
   return { version: app.getVersion() };
 });
+
+ipcMain.handle("open-dev-tools", async () => {
+  const focusedWindow = BrowserWindow.getFocusedWindow();
+  if (focusedWindow) {
+    focusedWindow.webContents.openDevTools();
+    return { ok: true };
+  }
+  return { ok: false, error: "No focused window found" };
+});
