@@ -701,26 +701,246 @@ body {
 
 .modal {
   position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
   display: flex;
   align-items: center;
   justify-content: center;
-  animation: fadeIn 0.2s ease;
-  z-index: 1000;
+  z-index: 10000;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  backdrop-filter: blur(4px);
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+.modal.visible {
+  opacity: 1;
+  pointer-events: auto;
 }
 
-.modal .modal-content h2 {
+.modal-content {
+  background: var(--bg-secondary);
+  border-radius: 16px;
+  width: 90%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+  border: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  transform: translateY(20px);
+  transition: transform 0.3s ease, opacity 0.3s ease;
+  opacity: 0;
+}
+
+.modal.visible .modal-content {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.modal-header {
+  padding: 20px 24px;
+  background: linear-gradient(135deg, var(--accent) 0%, #4a90e2 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-close-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: white;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+
+.modal-close-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: rotate(90deg);
+}
+
+.modal-body {
+  padding: 24px;
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+
+/* Custom scrollbar for WebKit browsers (Chrome, Safari, etc.) */
+.modal-body::-webkit-scrollbar {
+  width: 6px;
+}
+
+.modal-body::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 10px 0;
+}
+
+.modal-body::-webkit-scrollbar-thumb {
+  background-color: var(--accent);
+  border-radius: 3px;
+  transition: all 0.2s ease;
+}
+
+.modal-body::-webkit-scrollbar-thumb:hover {
+  background-color: var(--accent-hover);
+}
+
+/* Firefox scrollbar */
+.modal-body {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+
+/* About modal specific styles */
+.about-footer .about-links {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.about-footer .about-link {
+  color: var(--text-secondary);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.about-footer .about-link:hover {
+  color: var(--accent);
+  background: var(--bg-secondary);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.about-footer .about-icon {
+  font-size: 1.1em;
+  transition: transform 0.2s ease;
+}
+
+.about-footer .about-link:hover .about-icon {
+  transform: scale(1.1);
+}
+
+/* Developer Tools Section */
+.dev-tools-section {
+  display: none;
+  margin-top: 24px;
+  padding: 20px 24px;
+  border-top: 1px solid var(--border);
+  background: rgba(var(--accent-rgb), 0.05);
+  border-radius: 0 0 12px 12px;
+}
+
+.dev-tools-title {
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  padding: 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.dev-tools-btn {
+  width: 100%;
+  padding: 12px 16px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.dev-tools-btn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.dev-tools-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dev-tools-btn .btn-icon {
+  font-size: 1.1em;
+  transition: transform 0.2s ease;
+}
+
+.dev-tools-btn:hover .btn-icon {
+  transform: rotate(15deg);
+}
+
+.about-app-title {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.about-app-icon {
+  width: 80px;
+  height: 80px;
+  border-radius: 18px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  border: 2px solid var(--border);
+  background: var(--bg-primary);
+  padding: 8px;
+}
+
+.about-app-title h2 {
+  margin: 12px 0 8px;
+  font-size: 24px;
+  font-weight: 700;
   color: var(--text-primary);
+}
+
+.about-app-title p {
+  margin: 0 0 16px;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.5;
   margin-top: 0;
 }
 
@@ -731,182 +951,7 @@ body {
 }
 
 .about-section:last-of-type {
-  border-bottom: none;
-}
-
-.about-section h3 {
-  color: var(--accent);
-  margin: 10px 0 8px 0;
-}
-
-.about-section p {
-  margin: 6px 0;
-  line-height: 1.4;
-  color: var(--text-secondary);
-}
-
-.about-section a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-.about-section a:hover {
-  text-decoration: underline;
-}
-
-.modal-content {
-  background: var(--bg-secondary);
-  padding: 28px;
-  border-radius: 12px;
-  min-width: 420px;
-  max-width: 90vw;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
-  animation: slideUp 0.3s ease;
-  border: 1px solid var(--border);
-  position: relative;
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border);
-}
-
-.modal-header h2 {
-  margin: 0;
-  flex: 1;
-}
-
-.modal-close-btn {
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 24px;
-  cursor: pointer;
-  padding: 0;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-}
-
-.modal-close-btn:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-  transform: scale(1.1);
-}
-
-.modal-close-btn:active {
-  transform: scale(0.95);
-}
-
-@keyframes slideUp {
-  from {
-    transform: translateY(20px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.modal h2 {
-  margin: 0 0 20px 0;
-  font-size: 22px;
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.modal p {
-  margin: 0 0 16px 0;
-  color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.modal label {
-  display: block;
-  margin: 0 0 8px 0;
-  color: var(--text-primary);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.modal input[type="text"],
-.modal input[type="number"] {
   width: 100%;
-  padding: 10px 12px;
-  margin-bottom: 12px;
-  border: 1px solid var(--border-light);
-  border-radius: 8px;
-  font-size: 14px;
-  transition: all 0.2s ease;
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-
-.modal input[type="text"]::placeholder,
-.modal input[type="number"]::placeholder {
-  color: var(--text-tertiary);
-}
-
-.modal input[type="text"]:focus,
-.modal input[type="number"]:focus {
-  outline: none;
-  border-color: var(--accent);
-  background: var(--bg-tertiary);
-  box-shadow: 0 0 0 3px rgba(0, 102, 255, 0.15);
-}
-
-.modal input[type="checkbox"] {
-  margin-right: 8px;
-  cursor: pointer;
-  width: 18px;
-  height: 18px;
-  accent-color: var(--accent);
-}
-
-.row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.row button {
-  flex: 1;
-  min-width: 120px;
-}
-
-.modal button {
-  padding: 10px 16px;
-  border: none;
-  border-radius: 8px;
-  font-weight: 500;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.modal button:hover {
-  transform: translateY(-1px);
-}
-
-.modal button:active {
-  transform: translateY(0);
-}
-
-.modal button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
 }

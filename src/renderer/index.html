@@ -190,35 +190,89 @@
     <div id="about" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
-                <h2>About Sama Live</h2>
+                <h2><span class="about-icon">📺</span> Sama Live</h2>
                 <button id="closeAboutX" class="modal-close-btn" title="Close">✕</button>
             </div>
-            <div class="about-section">
-                <h3>App Information</h3>
-                <p><strong>Name:</strong> Sama Live</p>
-                <p><strong>Version:</strong> <span id="appVersion">0.1.0</span></p>
-                <p><strong>Description:</strong> A lightweight Electron app for streaming live TV from M3U/M3U8
-                    playlists with offline caching and low-bandwidth support.</p>
-                <p><strong>License:</strong> Proprietary - All rights reserved. Modification and forking require
-                    explicit permission.</p>
+            <div class="modal-body">
+                <div class="about-app-title">
+                    <img src="../../assets/icon.ico" alt="Sama Live" class="about-app-icon" id="appLogo">
+                    <h2>Sama Live</h2>
+                    <p>Stream your favorite live TV channels with a sleek and modern interface</p>
+                    <div class="about-version">v<span id="appVersion">0.1.0</span></div>
+                </div>
+
+                <div class="about-section">
+                    <h3>App Information</h3>
+                    <p>Sama Live is a lightweight and fast application for streaming live TV channels from M3U/M3U8 playlists. Enjoy a seamless viewing experience with a clean, modern interface.</p>
+                    
+                    <div class="about-grid">
+                        <div class="about-feature">
+                            <h4><span class="about-icon">⚡</span> Lightning Fast</h4>
+                            <p>Optimized for performance with minimal resource usage</p>
+                        </div>
+                        <div class="about-feature">
+                            <h4><span class="about-icon">🎨</span> Beautiful UI</h4>
+                            <p>Clean, modern interface with dark/light theme support</p>
+                        </div>
+                        <div class="about-feature">
+                            <h4><span class="about-icon">🔒</span> Private</h4>
+                            <p>Your playlists stay on your device, no data collection</p>
+                        </div>
+                        <div class="about-feature">
+                            <h4><span class="about-icon">🔌</span> No Plugins</h4>
+                            <p>Built with web technologies, no additional plugins needed</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="about-section">
+                    <h3>Features</h3>
+                    <ul style="padding-left: 20px; margin: 0;">
+                        <li>Support for M3U/M3U8 playlists</li>
+                        <li>Channel favorites and search functionality</li>
+                        <li>Adjustable video quality settings</li>
+                        <li>Dark/Light theme support</li>
+                        <li>Low bandwidth mode for slower connections</li>
+                        <li>Auto-reconnect for uninterrupted streaming</li>
+                    </ul>
+                </div>
+
+                <div class="about-section">
+                    <h3>How to Use</h3>
+                    <ol style="padding-left: 20px; margin: 0;">
+                        <li>Go to Settings and add your M3U/M3U8 playlist URL</li>
+                        <li>Click on any channel to start streaming</li>
+                        <li>Use the controls to adjust volume, quality, and more</li>
+                        <li>Click the star icon to add channels to Favorites</li>
+                    </ol>
+                </div>
+
+                <div class="about-section">
+                    <h3>Support</h3>
+                    <p>For issues or feature requests, please visit our GitHub repository or contact support.</p>
+                </div>
+
+                <div class="about-footer">
+                    <div class="about-version">v<span id="appVersion">0.1.0</span></div>
+                    <div class="about-links">
+                        <a href="https://github.com/yourusername/sama-live" target="_blank" class="about-link" rel="noopener noreferrer">
+                            <span class="about-icon">📂</span> GitHub
+                        </a>
+                        <a href="#" id="checkForUpdates" class="about-link">
+                            <span class="about-icon">🔄</span> Check for Updates
+                        </a>
+                        <a href="#" id="showLicenses" class="about-link">
+                            <span class="about-icon">📜</span> Licenses
+                        </a>
+                    </div>
+                </div>
             </div>
-            <div class="about-section">
-                <h3>Developer</h3>
-                <p><strong>Name:</strong> Matarr Sama</p>
-                <p><strong>Email:</strong> <a href="mailto:matarrsama@gmail.com">matarrsama@gmail.com</a></p>
-            </div>
-            <div class="about-section">
-                <h3>Updates</h3>
-                <button id="checkUpdatesBtn" style="width: 100%; padding: 10px; margin-bottom: 8px;">Check for
-                    Updates</button>
-                <button id="installDownloadedUpdateBtn"
-                    style="width: 100%; padding: 10px; margin-bottom: 8px; display: none;">Install Downloaded
-                    Update</button>
-                <p id="updateStatus" style="font-size: 12px; color: #a0a9b8; margin: 0;">Auto-checks on startup</p>
-            </div>
-            <div class="about-section" id="devToolsSection" style="display: none;">
-                <h3>Developer Tools</h3>
-                <button id="openDevToolsBtn" style="width: 100%; padding: 10px; margin-bottom: 8px;">Open Developer Console</button>
+            <div id="devToolsSection" class="dev-tools-section">
+                <h3 class="dev-tools-title">Developer Tools</h3>
+                <button id="openDevToolsBtn" class="dev-tools-btn">
+                    <span class="btn-icon">🛠️</span>
+                    <span>Open Developer Console</span>
+                </button>
             </div>
         </div>
     </div>

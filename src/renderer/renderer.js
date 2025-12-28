@@ -1450,36 +1450,138 @@
       await autoLoadChannels(customUrl);
     }
   };
-  $("#aboutBtn").onclick = () => {
-    $("#about").classList.remove("hidden");
-    // Display app version
-    window.electronAPI.getAppVersion().then((data) => {
-      $("#appVersion").textContent = data.version;
-    });
-  };
-  $("#closeAboutX").onclick = () => {
-    $("#about").classList.add("hidden");
-    // Hide developer tools section when closing about page
-    $("#devToolsSection").style.display = "none";
-    updateClickCount = 0; // Reset click counter
-    if (clickTimeout) {
-      clearTimeout(clickTimeout);
-      clickTimeout = null;
-    }
-  };
-  // Keep legacy close button handler for backwards compatibility
-  if ($("#closeAbout")) {
-    $("#closeAbout").onclick = () => {
-      $("#about").classList.add("hidden");
-      // Hide developer tools section when closing about page
-      $("#devToolsSection").style.display = "none";
-      updateClickCount = 0; // Reset click counter
-      if (clickTimeout) {
-        clearTimeout(clickTimeout);
-        clickTimeout = null;
+  // About modal handling
+  const aboutModal = $("#about");
+  const closeAboutBtn = $("#closeAboutX");
+  const appLogo = $("#appLogo");
+  const devToolsSection = $("#devToolsSection");
+  
+  // Developer tools secret click handler
+  let clickCount = 0;
+  let clickTimer = null;
+  const CLICK_THRESHOLD = 5;
+  const CLICK_TIMEOUT = 1000; // 1 second window for rapid clicks
+  
+  if (appLogo) {
+    appLogo.addEventListener('click', () => {
+      // Clear any existing timer
+      if (clickTimer) {
+        clearTimeout(clickTimer);
       }
+      
+      // Increment click count
+      clickCount++;
+      
+      // If we've reached the threshold, show the dev tools
+      if (clickCount >= CLICK_THRESHOLD) {
+        if (devToolsSection) {
+          devToolsSection.style.display = 'block';
+          // Scroll to show the dev tools section
+          devToolsSection.scrollIntoView({ behavior: 'smooth' });
+          // Reset the counter
+          clickCount = 0;
+        }
+      }
+      
+      // Set a timer to reset the counter if no more clicks
+      clickTimer = setTimeout(() => {
+        clickCount = 0;
+        clickTimer = null;
+      }, CLICK_TIMEOUT);
+    });
+    
+    // Add hover effect to give a hint
+    appLogo.style.cursor = 'pointer';
+    appLogo.style.transition = 'transform 0.2s';
+    appLogo.addEventListener('mouseover', () => {
+      appLogo.style.transform = 'scale(1.05)';
+    });
+    appLogo.addEventListener('mouseout', () => {
+      appLogo.style.transform = 'scale(1)';
+    });
+  }
+  
+  // Toggle modal visibility
+  function toggleAboutModal(show = null) {
+    if (show === null) {
+      show = aboutModal.classList.contains("hidden");
+    }
+    
+    if (show) {
+      // Reset the click counter when opening the modal
+      clickCount = 0;
+      if (clickTimer) {
+        clearTimeout(clickTimer);
+        clickTimer = null;
+      }
+      
+      aboutModal.classList.remove("hidden");
+      // Use requestAnimationFrame to ensure the element is visible before adding the 'visible' class
+      requestAnimationFrame(() => {
+        aboutModal.classList.add("visible");
+      });
+      
+      // Display app version
+      if (window.electronAPI && window.electronAPI.getAppVersion) {
+        window.electronAPI.getAppVersion().then((data) => {
+          const versionElements = document.querySelectorAll("#appVersion");
+          versionElements.forEach(el => {
+            el.textContent = data.version;
+          });
+        });
+      }
+    } else {
+      aboutModal.classList.remove("visible");
+      // Hide developer tools section when closing about page
+      if (devToolsSection) {
+        devToolsSection.style.display = "none";
+      }
+      updateClickCount = 0; // Reset click counter
+      
+      // Reset the click counter and timer
+      clickCount = 0;
+      if (clickTimer) {
+        clearTimeout(clickTimer);
+        clickTimer = null;
+      }
+      
+      // Wait for the transition to complete before hiding the element
+      aboutModal.addEventListener('transitionend', function handler() {
+        if (!aboutModal.classList.contains("visible")) {
+          aboutModal.classList.add("hidden");
+        }
+        aboutModal.removeEventListener('transitionend', handler);
+      }, { once: true });
+    }
+  }
+  
+  // Toggle About modal
+  $("#aboutBtn").onclick = (e) => {
+    e.stopPropagation();
+    toggleAboutModal();
+  };
+  
+  // Close modal when clicking the close button
+  if (closeAboutBtn) {
+    closeAboutBtn.onclick = (e) => {
+      e.stopPropagation();
+      toggleAboutModal(false);
     };
   }
+  
+  // Close modal when clicking outside the modal content
+  aboutModal.onclick = (e) => {
+    if (e.target === aboutModal) {
+      toggleAboutModal(false);
+    }
+  };
+
+  // Close modal with Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !aboutModal.classList.contains("hidden")) {
+      toggleAboutModal(false);
+    }
+  });
 
   // Open developer tools button
   if ($("#openDevToolsBtn")) {
