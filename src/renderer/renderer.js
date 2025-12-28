@@ -48,9 +48,11 @@
   const $ = (sel) => document.querySelector(sel);
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
+  const DEFAULT_VIRTUALIZE_THRESHOLD = 1500;
   const VIRTUALIZE_THRESHOLD = Math.max(
     0,
-    Number(localStorage.getItem("sama-live_virtual_threshold")) || 10000
+    Number(localStorage.getItem("sama-live_virtual_threshold")) ||
+      DEFAULT_VIRTUALIZE_THRESHOLD
   );
   const VIRTUAL_ITEM_HEIGHT = 48;
   const VIRTUAL_OVERSCAN = 8;
@@ -506,6 +508,16 @@
       return;
     }
 
+    const getOffsetTopWithin = (el, ancestor) => {
+      let top = 0;
+      let node = el;
+      while (node && node !== ancestor && node instanceof HTMLElement) {
+        top += node.offsetTop || 0;
+        node = node.offsetParent;
+      }
+      return top;
+    };
+
     ul.classList.add("virtual-list");
     ul.style.position = "relative";
     ul.style.height = `${channels.length * VIRTUAL_ITEM_HEIGHT}px`;
@@ -513,10 +525,9 @@
     let rafScheduled = false;
     let lastRangeKey = "";
 
+    let ulTopInSidebar = getOffsetTopWithin(ul, sidebar);
+
     const computeRange = () => {
-      const sidebarRect = sidebar.getBoundingClientRect();
-      const ulRect = ul.getBoundingClientRect();
-      const ulTopInSidebar = ulRect.top - sidebarRect.top + sidebar.scrollTop;
       const viewTop = sidebar.scrollTop;
       const viewBottom = sidebar.scrollTop + sidebar.clientHeight;
       const start = Math.max(
@@ -559,10 +570,14 @@
     };
 
     sidebar.addEventListener("scroll", onScrollOrResize, { passive: true });
-    window.addEventListener("resize", onScrollOrResize);
+    const onResize = () => {
+      ulTopInSidebar = getOffsetTopWithin(ul, sidebar);
+      onScrollOrResize();
+    };
+    window.addEventListener("resize", onResize);
     ul.__virtualCleanup = () => {
       sidebar.removeEventListener("scroll", onScrollOrResize);
-      window.removeEventListener("resize", onScrollOrResize);
+      window.removeEventListener("resize", onResize);
     };
     virtualCleanupFns.push(ul.__virtualCleanup);
     render();
