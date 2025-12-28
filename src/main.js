@@ -10,7 +10,10 @@ const { autoUpdater } = require("electron-updater");
 const store = new Store({
   schema: {
     playlistUrl: { type: "string", default: "" },
+    playlistUrl2: { type: "string", default: "" },
     cachedPlaylist: { type: "string", default: "" },
+    cachedPlaylist1: { type: "string", default: "" },
+    cachedPlaylist2: { type: "string", default: "" },
     favorites: { type: "array", default: [] },
     volume: { type: "number", default: 0.8 },
     settings: {
@@ -235,6 +238,7 @@ ipcMain.handle("get-settings", async () => {
   return {
     settings: store.get("settings"),
     playlistUrl: store.get("playlistUrl"),
+    playlistUrl2: store.get("playlistUrl2"),
     favorites: store.get("favorites"),
     volume: store.get("volume"),
   };
@@ -262,6 +266,8 @@ ipcMain.handle("set-settings", async (event, payload) => {
   store.set("settings", payload.settings || store.get("settings"));
   if (payload.playlistUrl !== undefined)
     store.set("playlistUrl", payload.playlistUrl);
+  if (payload.playlistUrl2 !== undefined)
+    store.set("playlistUrl2", payload.playlistUrl2);
   return { ok: true };
 });
 
@@ -269,6 +275,8 @@ ipcMain.handle("clear-cache", async () => {
   try {
     // Clear cached playlist
     store.set("cachedPlaylist", "");
+    store.set("cachedPlaylist1", "");
+    store.set("cachedPlaylist2", "");
     
     // Clear favorites
     store.set("favorites", []);
@@ -297,8 +305,26 @@ ipcMain.handle("get-cached-playlist", async () => {
   return store.get("cachedPlaylist");
 });
 
+ipcMain.handle("get-cached-playlist-1", async () => {
+  return store.get("cachedPlaylist1");
+});
+
+ipcMain.handle("get-cached-playlist-2", async () => {
+  return store.get("cachedPlaylist2");
+});
+
 ipcMain.handle("save-cached-playlist", async (event, playlistText) => {
   store.set("cachedPlaylist", playlistText || "");
+  return { ok: true };
+});
+
+ipcMain.handle("save-cached-playlist-1", async (event, playlistText) => {
+  store.set("cachedPlaylist1", playlistText || "");
+  return { ok: true };
+});
+
+ipcMain.handle("save-cached-playlist-2", async (event, playlistText) => {
+  store.set("cachedPlaylist2", playlistText || "");
   return { ok: true };
 });
 
@@ -330,6 +356,12 @@ ipcMain.handle("fetch-playlist", async (event, url) => {
 
 ipcMain.handle("get-favorites", async () => {
   return store.get("favorites") || [];
+});
+
+ipcMain.handle("set-favorites", async (event, favorites) => {
+  const arr = Array.isArray(favorites) ? favorites : [];
+  store.set("favorites", arr);
+  return { ok: true, favorites: store.get("favorites") };
 });
 
 ipcMain.handle("toggle-favorite", async (event, channelId) => {

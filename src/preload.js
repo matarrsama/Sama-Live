@@ -16,11 +16,18 @@ contextBridge.exposeInMainWorld("api", {
   clearCache: () => ipcRenderer.invoke("clear-cache"),
   clearAllAppData: () => ipcRenderer.invoke("clear-all-app-data"),
   getCachedPlaylist: () => ipcRenderer.invoke("get-cached-playlist"),
+  getCachedPlaylist1: () => ipcRenderer.invoke("get-cached-playlist-1"),
+  getCachedPlaylist2: () => ipcRenderer.invoke("get-cached-playlist-2"),
   saveCachedPlaylist: (text) =>
     ipcRenderer.invoke("save-cached-playlist", text),
+  saveCachedPlaylist1: (text) =>
+    ipcRenderer.invoke("save-cached-playlist-1", text),
+  saveCachedPlaylist2: (text) =>
+    ipcRenderer.invoke("save-cached-playlist-2", text),
   fetchPlaylist: (url) => ipcRenderer.invoke("fetch-playlist", url),
   getCachedLogo: (url) => ipcRenderer.invoke("get-cached-logo", url),
   getFavorites: () => ipcRenderer.invoke("get-favorites"),
+  setFavorites: (favorites) => ipcRenderer.invoke("set-favorites", favorites),
   toggleFavorite: (id) => ipcRenderer.invoke("toggle-favorite", id),
   chooseFileForPlaylist: () => ipcRenderer.invoke("choose-file-for-playlist"),
   readLocalFile: (p) => ipcRenderer.invoke("read-local-file", p),

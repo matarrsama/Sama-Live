@@ -16,8 +16,10 @@
         <aside id="sidebar">
             <div id="sidebar-top">
                 <input id="search" placeholder="Search channels..." />
-                <button id="refreshBtn">Refresh</button>
-                <button id="settingsBtn">Settings</button>
+                <div class="sidebar-top-actions">
+                    <button id="refreshBtn">Refresh</button>
+                    <button id="settingsBtn">Settings</button>
+                </div>
             </div>
             <div id="favorites" class="section">
                 <div class="favorites-header">
@@ -27,16 +29,20 @@
                     </h3>
                     <button id="sidebarToggle" class="sidebar-toggle" title="Toggle Sidebar">&lt;</button>
                 </div>
-                <ul id="favorites-list" class="channel-list"></ul>
             </div>
-            <div id="channels" class="section">
-                <div class="channels-header">
-                    <h3>Channels</h3>
+
+            <div id="sidebar-scroll">
+                <ul id="favorites-list" class="channel-list"></ul>
+
+                <div id="channels" class="section">
+                    <div class="channels-header">
+                        <h3>Channels</h3>
+                    </div>
+                    <div id="channels-loading" class="channels-loading hidden">
+                        <div class="spinner-small">Loading....</div>
+                    </div>
+                    <div id="channel-groups"></div>
                 </div>
-                <div id="channels-loading" class="channels-loading hidden">
-                    <div class="spinner-small">Loading....</div>
-                </div>
-                <div id="channel-groups"></div>
             </div>
         </aside>
 
@@ -151,23 +157,45 @@
                 <button id="closeSettings" class="modal-close-btn" title="Close">✕</button>
             </div>
             <div class="modal-body">
-                <div class="form-group">
-                    <label>Playlist Selection</label>
-                    <select id="playlistSelect" class="form-control">
-                        <option value="">Custom URL</option>
-                        <option value="IPTV">IPTV</option>
-                        <option value="XUMO">XUMO</option>
-                    </select>
-                </div>
-                
-                <div class="form-group">
-                    <label>Playlist URL</label>
-                    <div class="input-group">
-                        <input id="playlistUrl" type="text" class="form-control" placeholder="https://example.com/playlist.m3u8" />
-                        <button id="loadSelectedPlaylist" class="btn-secondary" title="Load selected default playlist">
-                            Load Selected
-                        </button>
+                <div class="playlist-row">
+                    <div class="form-group playlist-col-select">
+                        <label>Playlist Selection</label>
+                        <select id="playlistSelect" class="form-control">
+                            <option value="">Custom URL</option>
+                            <option value="IPTV">IPTV</option>
+                            <option value="XUMO">XUMO</option>
+                        </select>
                     </div>
+                    <div class="form-group playlist-col-url">
+                        <label>Playlist URL</label>
+                        <div class="input-group">
+                            <input id="playlistUrl" type="text" class="form-control" placeholder="https://example.com/playlist.m3u8" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="playlist-row">
+                    <div class="form-group playlist-col-select">
+                        <label>Playlist Selection 2</label>
+                        <select id="playlistSelect2" class="form-control">
+                            <option value="">None</option>
+                            <option value="IPTV">IPTV</option>
+                            <option value="XUMO">XUMO</option>
+                        </select>
+                    </div>
+                    <div class="form-group playlist-col-url">
+                        <label>Playlist URL 2 (optional)</label>
+                        <div class="input-group">
+                            <input id="playlistUrl2" type="text" class="form-control" placeholder="https://example.com/playlist2.m3u8" />
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <button id="loadSelectedPlaylist" class="btn-primary" title="Load selected playlist(s)" style="width: 100%;">
+                        <span class="btn-loading-spinner" aria-hidden="true"></span>
+                        <span class="btn-label">Load Selected</span>
+                    </button>
                 </div>
                 
                 <div class="form-group">
@@ -192,17 +220,16 @@
                 </div>
                 
                 <div class="button-group">
-                    <button id="clearCache" class="btn">Clear Cache</button>
-                    <button id="importFile" class="btn">Import Playlist File</button>
+                    <button id="clearCache" class="btn-primary">Clear Cache</button>
+                    <button id="importFile" class="btn-primary">Import Playlist File</button>
+                    <button id="saveSettings" class="btn-primary">Save Settings</button>
                 </div>
                 
                 <div class="load-progress-container hidden">
                     <div class="load-progress-bar"></div>
                 </div>
                 
-                <div class="modal-footer">
-                    <button id="saveSettings" class="btn-primary">Save Settings</button>
-                </div>
+                <div class="modal-footer"></div>
             </div>
         </div>
     </div>

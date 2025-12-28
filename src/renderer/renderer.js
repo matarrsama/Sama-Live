@@ -52,7 +52,7 @@
     0,
     Number(localStorage.getItem("sama-live_virtual_threshold")) || 10000
   );
-  const VIRTUAL_ITEM_HEIGHT = 56;
+  const VIRTUAL_ITEM_HEIGHT = 48;
   const VIRTUAL_OVERSCAN = 8;
   const TRANSPARENT_PIXEL =
     "data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw==";
@@ -76,10 +76,14 @@
   };
 
   let actualPlaylistUrl = ""; // Store the real URL internally
+  let actualPlaylistUrl2 = ""; // Optional second URL
   let selectedPlaylist = null; // Track which default playlist is selected
+  let selectedPlaylist2 = null; // Track which default playlist is selected for URL2
 
   const state = {
     channels: [],
+    channels1: [],
+    channels2: [],
     favorites: new Set(),
     favoriteOrder: [], // Track order of added favorites (newest first)
     settings: {
@@ -89,6 +93,7 @@
       limitToSD: true,
     },
     playlistUrl: "",
+    playlistUrl2: "",
     failureCounts: {},
     current: null,
     retriesLeft: 3,
@@ -338,8 +343,13 @@
   // Store groups data for lazy rendering
   let groupsCache = {};
   let expandedGroups = new Set(); // Groups expanded due to user interaction
-  let expandedGroupsOrder = []; // Track order of expanded groups to limit to 2
+  let expandedGroupsOrderBySection = {}; // Track order of expanded groups per section
   let isSearchActive = false; // Track if search is currently active
+
+  let playlist1Collapsed =
+    localStorage.getItem("sama-live_playlist1_collapsed") === "true";
+  let playlist2Collapsed =
+    localStorage.getItem("sama-live_playlist2_collapsed") === "true";
 
   function cleanupVirtualLists() {
     if (!virtualCleanupFns.length) return;
@@ -488,7 +498,7 @@
   }
 
   function renderVirtualGroupChannels(groupName, ul, channels) {
-    const sidebar = $("#sidebar");
+    const sidebar = $("#sidebar-scroll") || $("#sidebar");
     if (!sidebar) {
       for (let i = 0; i < channels.length; i++) {
         ul.appendChild(createChannelItem(channels[i]));
@@ -576,36 +586,265 @@
 
   function buildList(channels) {
     cleanupVirtualLists();
-    groupsCache = {};
-    channels.forEach((c) => {
-      const g = c.group || "Ungrouped";
-      groupsCache[g] = groupsCache[g] || [];
-      groupsCache[g].push(c);
-    });
-
     const container = $("#channel-groups");
     container.innerHTML = "";
 
-    const groupNames = Object.keys(groupsCache).sort();
+    // In search mode, keep the original single combined list behavior
+    if (isSearchActive) {
+      renderGroupsInto(channels, container, "search");
+      return;
+    }
 
-    // For large lists (>1000 channels), default groups to collapsed
+    const section1 = createPlaylistSection(
+      "Playlist 1",
+      "playlist1",
+      playlist1Collapsed,
+      (collapsed) => {
+        playlist1Collapsed = collapsed;
+        localStorage.setItem(
+          "sama-live_playlist1_collapsed",
+          String(collapsed)
+        );
+      },
+      async () => {
+        await confirmDeletePlaylist(1);
+      }
+    );
+
+    container.appendChild(section1.root);
+    renderGroupsInto(state.channels1 || [], section1.body, "p1");
+
+    const has2 = (state.channels2 || []).length > 0;
+    if (has2) {
+      const divider = document.createElement("div");
+      divider.className = "playlist-divider";
+      container.appendChild(divider);
+
+      const section2 = createPlaylistSection(
+        "Playlist 2",
+        "playlist2",
+        playlist2Collapsed,
+        (collapsed) => {
+          playlist2Collapsed = collapsed;
+          localStorage.setItem(
+            "sama-live_playlist2_collapsed",
+            String(collapsed)
+          );
+        },
+        async () => {
+          await confirmDeletePlaylist(2);
+        }
+      );
+
+      container.appendChild(section2.root);
+      renderGroupsInto(state.channels2 || [], section2.body, "p2");
+    }
+  }
+
+  function createPlaylistSection(title, key, collapsed, onToggle, onDelete) {
+    const root = document.createElement("div");
+    root.className = "playlist-section";
+    root.dataset.section = key;
+
+    const header = document.createElement("div");
+    header.className = "playlist-section-header";
+
+    const indicator = document.createElement("span");
+    indicator.className = "collapse-indicator";
+    indicator.textContent = collapsed ? "▶" : "▼";
+
+    const label = document.createElement("span");
+    label.className = "playlist-section-title";
+    label.textContent = title;
+
+    const deleteBtn = document.createElement("button");
+    deleteBtn.className = "playlist-delete-btn";
+    deleteBtn.type = "button";
+    deleteBtn.title = `Delete ${title}`;
+    deleteBtn.setAttribute("aria-label", `Delete ${title}`);
+    deleteBtn.textContent = "🗑";
+    deleteBtn.onclick = async (e) => {
+      e.stopPropagation();
+      if (typeof onDelete === "function") await onDelete();
+    };
+
+    header.appendChild(indicator);
+    header.appendChild(label);
+    header.appendChild(deleteBtn);
+
+    const body = document.createElement("div");
+    body.className = "playlist-section-body";
+    if (collapsed) body.classList.add("hidden");
+
+    header.onclick = () => {
+      const isOpen = !body.classList.contains("hidden");
+      if (isOpen) {
+        body.classList.add("hidden");
+        indicator.textContent = "▶";
+        onToggle(true);
+      } else {
+        body.classList.remove("hidden");
+        indicator.textContent = "▼";
+        onToggle(false);
+      }
+    };
+
+    root.appendChild(header);
+    root.appendChild(body);
+    return { root, body };
+  }
+
+  async function confirmDeletePlaylist(which) {
+    const title = which === 1 ? "Playlist 1" : "Playlist 2";
+    showConfirmation(
+      `Delete ${title}? This will remove its URL and clear its cached channels.`,
+      async () => {
+        await deletePlaylist(which);
+        showMessage(`✓ ${title} deleted`, 2000);
+      }
+    );
+  }
+
+  async function deletePlaylist(which) {
+    const url1 = actualPlaylistUrl || state.playlistUrl || "";
+    const url2 = actualPlaylistUrl2 || state.playlistUrl2 || "";
+
+    if (which === 2) {
+      // Clear playlist 2 settings + caches
+      actualPlaylistUrl2 = "";
+      state.playlistUrl2 = "";
+      selectedPlaylist2 = null;
+      const url2El = $("#playlistUrl2");
+      if (url2El) url2El.value = "";
+      const sel2 = $("#playlistSelect2");
+      if (sel2) sel2.value = "";
+
+      if (window.api.saveCachedPlaylist2) await window.api.saveCachedPlaylist2("");
+      if (window.api.saveCachedPlaylist) {
+        // keep playlist1 cache as merged single
+        const merged = (await window.api.getCachedPlaylist1?.()) || "";
+        await window.api.saveCachedPlaylist(merged);
+      }
+
+      // Remove favorites that belonged to playlist2
+      const keptFavs = Array.from(state.favorites).filter(
+        (id) => typeof id === "string" && !id.startsWith("p2::")
+      );
+      const favRes = await window.api.setFavorites(keptFavs);
+      state.favorites = new Set((favRes && favRes.favorites) || keptFavs);
+
+      // Update settings
+      await window.api.setSettings({ settings: state.settings, playlistUrl: url1, playlistUrl2: "" });
+
+      // Update in-memory channel splits + UI
+      state.channels2 = [];
+      state.channels = state.channels1;
+      buildSearchIndex();
+      buildList(state.channels);
+      buildFavorites();
+      return;
+    }
+
+    // Delete playlist 1: if playlist2 exists, shift it into playlist1
+    const has2 = !!url2;
+    if (has2) {
+      // Shift playlist2 -> playlist1
+      actualPlaylistUrl = url2;
+      state.playlistUrl = url2;
+      actualPlaylistUrl2 = "";
+      state.playlistUrl2 = "";
+      selectedPlaylist = selectedPlaylist2;
+      selectedPlaylist2 = null;
+
+      // UI fields
+      const sel1 = $("#playlistSelect");
+      if (sel1) sel1.value = selectedPlaylist || "";
+      const sel2 = $("#playlistSelect2");
+      if (sel2) sel2.value = "";
+      const urlEl1 = $("#playlistUrl");
+      if (urlEl1) urlEl1.value = (selectedPlaylist && PLAYLISTS[selectedPlaylist]) ? PLAYLISTS[selectedPlaylist].masked : url2;
+      const urlEl2 = $("#playlistUrl2");
+      if (urlEl2) urlEl2.value = "";
+
+      // Move caches
+      const cached2 = (await window.api.getCachedPlaylist2?.()) || "";
+      if (window.api.saveCachedPlaylist1) await window.api.saveCachedPlaylist1(cached2);
+      if (window.api.saveCachedPlaylist2) await window.api.saveCachedPlaylist2("");
+      if (window.api.saveCachedPlaylist) await window.api.saveCachedPlaylist(cached2);
+
+      // Migrate favorites: p2::<id> -> <id>
+      const migrated = Array.from(state.favorites)
+        .map((id) => (typeof id === "string" && id.startsWith("p2::") ? id.slice(4) : id))
+        .filter((id) => typeof id === "string" && id);
+      const favRes = await window.api.setFavorites(migrated);
+      state.favorites = new Set((favRes && favRes.favorites) || migrated);
+
+      // Shift channels
+      state.channels1 = state.channels2.map((c) => ({
+        ...c,
+        id: (c.id || "").startsWith("p2::") ? `p1::${c.id.slice(4)}` : c.id,
+      }));
+      state.channels2 = [];
+      state.channels = state.channels1;
+
+      await window.api.setSettings({ settings: state.settings, playlistUrl: url2, playlistUrl2: "" });
+      buildSearchIndex();
+      buildList(state.channels);
+      buildFavorites();
+      return;
+    }
+
+    // No playlist2 -> clear playlist1 entirely
+    actualPlaylistUrl = "";
+    state.playlistUrl = "";
+    selectedPlaylist = null;
+    const sel1 = $("#playlistSelect");
+    if (sel1) sel1.value = "";
+    const urlEl1 = $("#playlistUrl");
+    if (urlEl1) urlEl1.value = "";
+
+    if (window.api.saveCachedPlaylist) await window.api.saveCachedPlaylist("");
+    if (window.api.saveCachedPlaylist1) await window.api.saveCachedPlaylist1("");
+    if (window.api.saveCachedPlaylist2) await window.api.saveCachedPlaylist2("");
+
+    // Remove all favorites (since channels are gone)
+    const favRes = await window.api.setFavorites([]);
+    state.favorites = new Set((favRes && favRes.favorites) || []);
+
+    await window.api.setSettings({ settings: state.settings, playlistUrl: "", playlistUrl2: "" });
+    state.channels = [];
+    state.channels1 = [];
+    state.channels2 = [];
+    buildSearchIndex();
+    buildList([]);
+    buildFavorites();
+  }
+
+  function renderGroupsInto(channels, container, sectionKey) {
+    const localGroups = {};
+    channels.forEach((c) => {
+      const g = c.group || "Ungrouped";
+      localGroups[g] = localGroups[g] || [];
+      localGroups[g].push(c);
+    });
+
+    const groupNames = Object.keys(localGroups).sort();
     const shouldCollapse = channels.length > 1000;
-    const isSingleGroup = groupNames.length === 1; // Always expand single groups
+    const isSingleGroup = groupNames.length === 1;
 
-    groupNames.forEach((g, index) => {
+    groupNames.forEach((g) => {
+      const groupKey = `${sectionKey}::${g}`;
       const groupEl = document.createElement("div");
       groupEl.className = "group";
-      groupEl.dataset.group = g;
+      groupEl.dataset.group = groupKey;
 
       const h = document.createElement("h4");
       h.className = "group-header";
 
-      // Collapse indicator
-      // Always expand: single groups, search mode, or user-clicked, or small playlists
       const isExpanded =
         isSingleGroup || isSearchActive
           ? true
-          : expandedGroups.has(g) || !shouldCollapse;
+          : expandedGroups.has(groupKey) || !shouldCollapse;
       const indicator = document.createElement("span");
       indicator.className = "collapse-indicator";
       indicator.textContent = isExpanded ? "▼" : "▶";
@@ -616,11 +855,11 @@
 
       const displayName = formatGroupName(g);
       groupNameDisplay.textContent = displayName;
-      groupNameDisplay.title = g; // Full name in tooltip
+      groupNameDisplay.title = g;
 
       const countBadge = document.createElement("span");
       countBadge.className = "channel-count";
-      countBadge.textContent = groupsCache[g].length;
+      countBadge.textContent = localGroups[g].length;
 
       h.appendChild(indicator);
       h.appendChild(groupNameDisplay);
@@ -629,18 +868,15 @@
       const ul = document.createElement("ul");
       ul.className = "channel-list";
 
-      // Initially render only if expanded
       if (isExpanded) {
-        renderGroupChannels(g, ul, groupsCache[g]);
+        renderGroupChannels(g, ul, localGroups[g]);
       } else {
         ul.classList.add("hidden");
       }
 
-      h.onclick = (e) => {
+      h.onclick = () => {
         const isCurrentlyExpanded = !ul.classList.contains("hidden");
-
         if (isCurrentlyExpanded) {
-          // Collapse
           if (ul.__virtualCleanup) {
             try {
               ul.__virtualCleanup();
@@ -651,18 +887,15 @@
           }
           ul.classList.add("hidden");
           indicator.textContent = "▶";
-          expandedGroups.delete(g);
-          expandedGroupsOrder = expandedGroupsOrder.filter(
-            (group) => group !== g
-          );
+          expandedGroups.delete(groupKey);
+          expandedGroupsOrderBySection[sectionKey] = [];
         } else {
-          // Expand - but only allow 1 open group at a time
-          // Close any previously open group
-          if (expandedGroups.size > 0) {
-            const previousGroup = expandedGroupsOrder[0];
-            // Find and collapse the previous group
-            const prevGroupEl = document.querySelector(
-              `.group[data-group="${previousGroup}"]`
+          const prev =
+            expandedGroupsOrderBySection[sectionKey] &&
+            expandedGroupsOrderBySection[sectionKey][0];
+          if (prev && prev !== groupKey) {
+            const prevGroupEl = container.querySelector(
+              `.group[data-group="${prev}"]`
             );
             if (prevGroupEl) {
               const prevUl = prevGroupEl.querySelector(".channel-list");
@@ -674,21 +907,17 @@
                 prevIndicator.textContent = "▶";
               }
             }
-            expandedGroups.delete(previousGroup);
+            expandedGroups.delete(prev);
           }
 
-          // Now expand the new group
           ul.classList.remove("hidden");
           indicator.textContent = "▼";
-          expandedGroups.add(g);
-          expandedGroupsOrder = [g]; // Only keep the current group in the order
+          expandedGroups.add(groupKey);
+          expandedGroupsOrderBySection[sectionKey] = [groupKey];
 
-          // Render channels only when expanding and list is empty
           if (ul.innerHTML === "") {
-            renderGroupChannels(g, ul, groupsCache[g]);
+            renderGroupChannels(g, ul, localGroups[g]);
           }
-
-          // Auto-scroll to the group header
           h.scrollIntoView({ behavior: "smooth", block: "center" });
         }
       };
@@ -697,10 +926,6 @@
       groupEl.appendChild(ul);
       container.appendChild(groupEl);
     });
-
-    console.log(
-      `Rendered ${groupNames.length} groups with ${channels.length} total channels`
-    );
   }
 
   function escapeHtml(s) {
@@ -738,8 +963,10 @@
     const res = await window.api.getSettings();
     state.settings = res.settings || state.settings;
     state.playlistUrl = res.playlistUrl || "";
+    state.playlistUrl2 = res.playlistUrl2 || "";
     state.volume = res.volume || 0.8; // Load saved volume or default to 80%
     actualPlaylistUrl = state.playlistUrl; // Keep track of real URL internally
+    actualPlaylistUrl2 = state.playlistUrl2;
     (res.favorites || []).forEach((f) => state.favorites.add(f));
 
     // Initialize favorite order (reverse of current favorites for newest-first display)
@@ -765,16 +992,68 @@
       $("#playlistUrl").value = state.playlistUrl;
     }
 
+    // populate playlist 2 UI - mask if it's a default playlist URL
+    const playlistSelect2El = $("#playlistSelect2");
+    const playlistUrl2El = $("#playlistUrl2");
+    if (playlistSelect2El && playlistUrl2El) {
+      let isDefaultPlaylist2 = false;
+      for (const [key, playlist] of Object.entries(PLAYLISTS)) {
+        if (state.playlistUrl2 && state.playlistUrl2 === playlist.url) {
+          playlistSelect2El.value = key;
+          playlistUrl2El.value = playlist.masked;
+          isDefaultPlaylist2 = true;
+          selectedPlaylist2 = key;
+          break;
+        }
+      }
+
+      if (!isDefaultPlaylist2) {
+        playlistSelect2El.value = "";
+        playlistUrl2El.value = state.playlistUrl2;
+      }
+    }
+
+    // playlistUrl2 is populated above alongside playlistSelect2
+
     $("#lowBandwidth").checked = !!state.settings.lowBandwidth;
     $("#autoReconnect").checked = !!state.settings.autoReconnect;
     $("#bufferSize").value = state.settings.bufferSeconds || 20;
 
-    // load cached playlist
+    // Migrate any legacy favorites (unprefixed IDs) -> playlist1 prefix
+    if (window.api.setFavorites) {
+      const needsMigration = Array.from(state.favorites).some(
+        (id) => typeof id === "string" && !id.startsWith("p1::") && !id.startsWith("p2::")
+      );
+      if (needsMigration) {
+        const migrated = Array.from(state.favorites).map((id) =>
+          typeof id === "string" && !id.startsWith("p1::") && !id.startsWith("p2::")
+            ? `p1::${id}`
+            : id
+        );
+        const favRes = await window.api.setFavorites(migrated);
+        state.favorites = new Set((favRes && favRes.favorites) || migrated);
+      }
+    }
+
+    // load cached playlists
     showChannelsLoading(true);
     const cached = await window.api.getCachedPlaylist();
+    const cached1 =
+      window.api.getCachedPlaylist1 && (await window.api.getCachedPlaylist1());
+    const cached2 =
+      window.api.getCachedPlaylist2 && (await window.api.getCachedPlaylist2());
     showChannelsLoading(false);
     if (cached) {
-      state.channels = parseM3U(cached);
+      const p1 = (cached1 ? parseM3U(cached1) : parseM3U(cached)).map((c) => ({
+        ...c,
+        id: `p1::${c.id}`,
+      }));
+      const p2 = cached2
+        ? parseM3U(cached2).map((c) => ({ ...c, id: `p2::${c.id}` }))
+        : [];
+      state.channels1 = p1;
+      state.channels2 = p2;
+      state.channels = [...p1, ...p2];
       buildSearchIndex(); // Build search index once for all channels
       buildList(state.channels);
       buildFavorites();
@@ -1369,6 +1648,7 @@
   $("#refreshBtn").onclick = async () => {
     // Use actualPlaylistUrl (real URL) instead of displayed value (which might be masked)
     const url = actualPlaylistUrl || state.playlistUrl;
+    const url2 = actualPlaylistUrl2 || state.playlistUrl2;
     if (!url || url.includes("*")) {
       showMessage(
         "No valid playlist URL set. Load a URL in settings first.",
@@ -1382,7 +1662,7 @@
     const originalText = "Refresh";
 
     showChannelsLoading(true);
-    const res = await window.api.fetchPlaylist(url);
+    const res = await loadPlaylistsSeparate(url, url2);
     showChannelsLoading(false);
 
     btn.disabled = false;
@@ -1392,12 +1672,32 @@
       showMessage("Failed to fetch playlist: " + res.error, 4000);
       return;
     }
-    state.channels = parseM3U(res.text);
+
+    const p1 = (res.text1 ? parseM3U(res.text1) : parseM3U(res.text)).map((c) => ({
+      ...c,
+      id: `p1::${c.id}`,
+    }));
+    const p2 = res.text2
+      ? parseM3U(res.text2).map((c) => ({ ...c, id: `p2::${c.id}` }))
+      : [];
+    state.channels1 = p1;
+    state.channels2 = p2;
+    state.channels = [...p1, ...p2];
     await window.api.saveCachedPlaylist(res.text);
+    if (window.api.saveCachedPlaylist1) {
+      await window.api.saveCachedPlaylist1(res.text1 || "");
+    }
+    if (window.api.saveCachedPlaylist2) {
+      await window.api.saveCachedPlaylist2(res.text2 || "");
+    }
     buildSearchIndex(); // Rebuild search index for new channels
     buildList(state.channels);
     buildFavorites();
-    showMessage(`Playlist refreshed - ${state.channels.length} channels`, 2000);
+    const sources = url2 ? 2 : 1;
+    showMessage(
+      `Playlist refreshed (${sources} source${sources === 1 ? "" : "s"}) - ${state.channels.length} channels`,
+      2000
+    );
   };
 
   // Settings modal
@@ -1432,6 +1732,28 @@
     }
   });
 
+  const playlistUrl2Input = $("#playlistUrl2");
+  if (playlistUrl2Input) {
+    playlistUrl2Input.addEventListener("input", (e) => {
+      const value = (e.target.value || "");
+      let isMasked = false;
+
+      for (const [key, playlist] of Object.entries(PLAYLISTS)) {
+        if (value === playlist.masked) {
+          isMasked = true;
+          break;
+        }
+      }
+
+      if (value && !isMasked) {
+        actualPlaylistUrl2 = value.trim();
+        selectedPlaylist2 = null;
+        const sel2 = $("#playlistSelect2");
+        if (sel2) sel2.value = "";
+      }
+    });
+  }
+
   // Handle playlist dropdown selection
   $("#playlistSelect").onchange = () => {
     const selected = $("#playlistSelect").value;
@@ -1445,45 +1767,102 @@
     }
   };
 
+  // Handle playlist 2 dropdown selection
+  const playlistSelect2 = $("#playlistSelect2");
+  if (playlistSelect2) {
+    playlistSelect2.onchange = () => {
+      const selected = playlistSelect2.value;
+      const url2El = $("#playlistUrl2");
+      if (!url2El) return;
+
+      if (selected && PLAYLISTS[selected]) {
+        selectedPlaylist2 = selected;
+        const playlist = PLAYLISTS[selected];
+        url2El.value = playlist.masked;
+      } else {
+        selectedPlaylist2 = null;
+        url2El.value = "";
+        actualPlaylistUrl2 = "";
+      }
+    };
+  }
+
   // Handle loading selected playlist
   $("#loadSelectedPlaylist").onclick = async () => {
-    // Check if a preset playlist is selected from dropdown
+    const loadBtn = $("#loadSelectedPlaylist");
+    const loadBtnLabel = loadBtn ? loadBtn.querySelector(".btn-label") : null;
+    const originalLabel = loadBtnLabel ? loadBtnLabel.textContent : "Load Selected";
+    // Resolve URL 1
+    let url1 = "";
     if (selectedPlaylist && PLAYLISTS[selectedPlaylist]) {
       const playlist = PLAYLISTS[selectedPlaylist];
-      const newUrl = playlist.url;
-
-      // Update actualPlaylistUrl for display
-      actualPlaylistUrl = newUrl;
+      url1 = playlist.url;
+      actualPlaylistUrl = url1;
       $("#playlistUrl").value = playlist.masked;
-
-      // Clear old channels and load new ones
-      state.channels = [];
-      searchIndex = {}; // Clear search index for old channels
-      isSearchActive = false;
-      expandedGroups.clear();
-      expandedGroupsOrder = [];
-      buildList([]);
-      buildFavorites();
-      // Auto-load the new playlist
-      await autoLoadChannels(newUrl);
     } else {
-      // Use custom URL from input field
       const customUrl = $("#playlistUrl").value.trim();
       if (!customUrl) {
         showMessage("⚠ Please enter a playlist URL", 1500);
         return;
       }
-
+      url1 = customUrl;
       actualPlaylistUrl = customUrl;
-      state.channels = [];
-      searchIndex = {}; // Clear search index for old channels
-      isSearchActive = false;
-      expandedGroups.clear();
-      expandedGroupsOrder = [];
-      buildList([]);
-      buildFavorites();
-      // Auto-load the custom URL playlist
-      await autoLoadChannels(customUrl);
+    }
+
+    // Resolve URL 2
+    let url2 = "";
+    if (selectedPlaylist2 && PLAYLISTS[selectedPlaylist2]) {
+      const playlist2 = PLAYLISTS[selectedPlaylist2];
+      url2 = playlist2.url;
+      actualPlaylistUrl2 = url2;
+      const url2El = $("#playlistUrl2");
+      if (url2El) url2El.value = playlist2.masked;
+    } else {
+      url2 = ($("#playlistUrl2")?.value || "").trim();
+      actualPlaylistUrl2 = url2;
+    }
+
+    // Safety: allow same playlist in both sources, but avoid double fetch + duplicates
+    if (url2 && url1 && url2.trim() === url1.trim()) {
+      url2 = "";
+      actualPlaylistUrl2 = "";
+      state.playlistUrl2 = "";
+      const url2El = $("#playlistUrl2");
+      if (url2El) url2El.value = "";
+      const sel2 = $("#playlistSelect2");
+      if (sel2) sel2.value = "";
+      selectedPlaylist2 = null;
+      showMessage("ℹ Same playlist selected for both sources. Source 2 ignored.", 3000);
+    }
+
+    state.playlistUrl2 = url2;
+
+    // Clear old channels and load new ones
+    state.channels = [];
+    state.channels1 = [];
+    state.channels2 = [];
+    searchIndex = {}; // Clear search index for old channels
+    isSearchActive = false;
+    expandedGroups.clear();
+    expandedGroupsOrderBySection = {};
+    buildList([]);
+    buildFavorites();
+
+    if (loadBtn) {
+      loadBtn.classList.add("is-loading");
+      loadBtn.disabled = true;
+      if (loadBtnLabel) loadBtnLabel.textContent = "Loading...";
+    }
+
+    try {
+      // Auto-load playlist(s)
+      await autoLoadChannels(url1, url2);
+    } finally {
+      if (loadBtn) {
+        loadBtn.classList.remove("is-loading");
+        loadBtn.disabled = false;
+        if (loadBtnLabel) loadBtnLabel.textContent = originalLabel;
+      }
     }
   };
   // About modal handling
@@ -1717,6 +2096,7 @@
           limitToSD: true,
         },
         playlistUrl: actualPlaylistUrl || $("#playlistUrl").value.trim(),
+        playlistUrl2: actualPlaylistUrl2 || ($("#playlistUrl2")?.value || "").trim(),
       };
       console.log("Sending to main process:", payload);
       const result = await window.api.setSettings(payload);
@@ -1724,6 +2104,9 @@
       if (result && result.ok) {
         state.settings = payload.settings;
         state.playlistUrl = payload.playlistUrl;
+        state.playlistUrl2 = payload.playlistUrl2;
+        actualPlaylistUrl = state.playlistUrl;
+        actualPlaylistUrl2 = state.playlistUrl2;
 
         // Stop monitoring if auto-reconnect is disabled
         if (!autoReconnectEnabled) {
@@ -1752,7 +2135,7 @@
     }
   };
 
-  async function autoLoadChannels(url, retries = 3) {
+  async function autoLoadChannels(url, url2 = "", retries = 3) {
     showChannelsLoading(true);
     showMessage("Loading playlist...");
 
@@ -1761,7 +2144,7 @@
         console.log(
           `Fetching channels (attempt ${attempt}/${retries}) from ${url}...`
         );
-        const res = await window.api.fetchPlaylist(url);
+        const res = await loadPlaylistsSeparate(url, url2);
         console.log(`Fetch response received:`, res);
 
         if (res.ok && res.text) {
@@ -1773,27 +2156,46 @@
             throw new Error("Playlist appears to be empty or invalid");
           }
 
-          state.channels = parsedChannels;
+          const p1 = (res.text1 ? parseM3U(res.text1) : parsedChannels).map((c) => ({
+            ...c,
+            id: `p1::${c.id}`,
+          }));
+          const p2 = res.text2
+            ? parseM3U(res.text2).map((c) => ({ ...c, id: `p2::${c.id}` }))
+            : [];
+          state.channels1 = p1;
+          state.channels2 = p2;
+          state.channels = [...p1, ...p2];
           await window.api.saveCachedPlaylist(res.text);
+          if (window.api.saveCachedPlaylist1) {
+            await window.api.saveCachedPlaylist1(res.text1 || "");
+          }
+          if (window.api.saveCachedPlaylist2) {
+            await window.api.saveCachedPlaylist2(res.text2 || "");
+          }
           buildSearchIndex(); // Rebuild search index for new channels
           buildList(state.channels);
           buildFavorites();
           showChannelsLoading(false);
-          showMessage(`✓ Loaded ${state.channels.length} channels`, 2000);
+          const sources = url2 ? 2 : 1;
+          showMessage(
+            `✓ Loaded ${state.channels.length} channels (${sources} source${sources === 1 ? "" : "s"})`,
+            2000
+          );
           console.log(
             `✓ Successfully loaded ${state.channels.length} channels`
           );
           return;
-        } else {
-          const errorMsg = res.error || "Unknown error";
-          console.error(
-            `Fetch failed (attempt ${attempt}/${retries}): ${errorMsg}`
-          );
+        }
 
-          if (attempt < retries) {
-            console.log(`Retrying in 2 seconds... (${attempt}/${retries})`);
-            await new Promise((resolve) => setTimeout(resolve, 2000));
-          }
+        const errorMsg = res.error || "Unknown error";
+        console.error(
+          `Fetch failed (attempt ${attempt}/${retries}): ${errorMsg}`
+        );
+
+        if (attempt < retries) {
+          console.log(`Retrying in 2 seconds... (${attempt}/${retries})`);
+          await new Promise((resolve) => setTimeout(resolve, 2000));
         }
       } catch (err) {
         console.error(
@@ -1808,12 +2210,46 @@
     }
 
     showChannelsLoading(false);
-    const errorMsg = "✗ Failed to load channels after " + retries + " attempts";
-    showMessage(errorMsg, 3000);
-    console.error(errorMsg);
+    showMessage("✗ Failed to load channels after 3 attempts", 4000);
   }
 
-  // Confirmation Modal Functions
+  async function loadPlaylistsSeparate(url1, url2) {
+    const u1 = typeof url1 === "string" ? url1.trim() : "";
+    const u2 = typeof url2 === "string" ? url2.trim() : "";
+    if (!u1) return { ok: false, error: "No playlist URL set" };
+
+    try {
+      const r1 = await window.api.fetchPlaylist(u1);
+      if (!r1 || !r1.ok) {
+        return { ok: false, error: (r1 && r1.error) || "Failed to fetch playlist" };
+      }
+
+      let r2 = null;
+      if (u2) {
+        r2 = await window.api.fetchPlaylist(u2);
+        if (!r2 || !r2.ok) {
+          return { ok: false, error: (r2 && r2.error) || "Failed to fetch playlist" };
+        }
+      }
+
+      const mergedText =
+        "#EXTM3U\n" +
+        [r1, r2]
+          .filter(Boolean)
+          .map((r) => (r.text || "").replace(/^#EXTM3U\s*/i, ""))
+          .join("\n");
+
+      return {
+        ok: true,
+        text: mergedText,
+        text1: r1.text || "",
+        text2: r2 ? r2.text || "" : "",
+      };
+    } catch (e) {
+      return { ok: false, error: e && e.message ? e.message : String(e) };
+    }
+  }
+
   function showConfirmation(message, onConfirm, onCancel = null) {
     const modal = $("#confirmationModal");
     const messageEl = $("#confirmationMessage");
@@ -1999,8 +2435,17 @@
       const res = await window.api.readLocalFile(path);
       showSpinner(false);
       if (res && res.ok) {
-        state.channels = parseM3U(res.text);
+        const p1 = parseM3U(res.text).map((c) => ({ ...c, id: `p1::${c.id}` }));
+        state.channels1 = p1;
+        state.channels2 = [];
+        state.channels = p1;
         await window.api.saveCachedPlaylist(res.text);
+        if (window.api.saveCachedPlaylist1) {
+          await window.api.saveCachedPlaylist1(res.text);
+        }
+        if (window.api.saveCachedPlaylist2) {
+          await window.api.saveCachedPlaylist2("");
+        }
         buildList(state.channels);
         buildFavorites();
         showMessage(`✓ Imported ${state.channels.length} channels`, 3000);
