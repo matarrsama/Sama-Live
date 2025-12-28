@@ -1790,6 +1790,102 @@
     );
   };
 
+  // About modal buttons
+  const checkForUpdatesBtn = document.getElementById('checkForUpdates');
+  const showLicensesBtn = document.getElementById('showLicenses');
+  const updateStatusEl = document.getElementById('updateStatus');
+
+  if (checkForUpdatesBtn) {
+    checkForUpdatesBtn.addEventListener('click', async () => {
+      if (!window.electronAPI) {
+        updateStatusEl.textContent = 'Update check not available';
+        return;
+      }
+
+      updateStatusEl.textContent = 'Checking...';
+      checkForUpdatesBtn.disabled = true;
+
+      try {
+        const result = await window.electronAPI.checkForUpdates();
+        console.log('Update check result:', result);
+
+        if (result.updateAvailable) {
+          updateStatusEl.textContent = 'Update available! Restart to install.';
+          // Optional: Add a restart button here
+        } else {
+          updateStatusEl.textContent = 'You have the latest version';
+        }
+      } catch (error) {
+        console.error('Error checking for updates:', error);
+        updateStatusEl.textContent = 'Error checking for updates';
+      } finally {
+        checkForUpdatesBtn.disabled = false;
+      }
+    });
+  }
+
+  // License modal handling
+  const licenseModal = document.getElementById('licenseModal');
+  const closeLicenseModal = document.getElementById('closeLicenseModal');
+  const closeLicenseBtn = document.getElementById('closeLicenseBtn');
+
+  function toggleLicenseModal(show = null) {
+    if (show === null) {
+      show = !licenseModal.classList.contains('visible');
+    }
+    
+    if (show) {
+      licenseModal.classList.add('visible');
+      document.body.style.overflow = 'hidden';
+    } else {
+      licenseModal.classList.remove('visible');
+      document.body.style.overflow = '';
+    }
+  }
+
+  if (showLicensesBtn) {
+    console.log('Adding click listener to showLicensesBtn');
+    showLicensesBtn.addEventListener('click', (e) => {
+      console.log('License button clicked');
+      console.log('showLicensesBtn:', showLicensesBtn);
+      console.log('licenseModal:', licenseModal);
+      e.preventDefault();
+      console.log('Toggling license modal');
+      toggleLicenseModal(true);
+      console.log('Modal hidden class after toggle:', licenseModal.classList.contains('hidden'));
+    });
+  } else {
+    console.error('showLicensesBtn not found in the DOM');
+  }
+
+  if (closeLicenseModal) {
+    closeLicenseModal.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleLicenseModal(false);
+    });
+  }
+
+  if (closeLicenseBtn) {
+    closeLicenseBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      toggleLicenseModal(false);
+    });
+  }
+
+  // Close modal when clicking outside the content
+  licenseModal.addEventListener('click', (e) => {
+    if (e.target === licenseModal) {
+      toggleLicenseModal(false);
+    }
+  });
+
+  // Close modal with Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !licenseModal.classList.contains('hidden')) {
+      toggleLicenseModal(false);
+    }
+  });
+
   // Load Playlist button - loads the playlist from the URL
 
   $("#importFile").onclick = async () => {
