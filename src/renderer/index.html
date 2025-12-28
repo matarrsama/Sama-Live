@@ -146,42 +146,63 @@
     <!-- Settings modal -->
     <div id="settings" class="modal hidden">
         <div class="modal-content">
-            <h2>Settings</h2>
-            <label>Playlist Selection</label>
-            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                <select id="playlistSelect"
-                    style="flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #3a4151; background: #252d3d; color: #fff; font-size: 14px;">
-                    <option value="">Custom URL</option>
-                    <option value="IPTV">IPTV</option>
-                    <option value="XUMO">XUMO</option>
-                </select>
+            <div class="modal-header">
+                <h2><span class="about-icon">⚙️</span> Settings</h2>
+                <button id="closeSettings" class="modal-close-btn" title="Close">✕</button>
             </div>
-            <label>Playlist URL</label>
-            <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                <input id="playlistUrl" placeholder="https://example.com/playlist.m3u8" style="flex: 1;" />
-                <button id="loadSelectedPlaylist" style="padding: 10px 12px; white-space: nowrap;"
-                    title="Load selected default playlist">Load Selected</button>
-            </div>
-            <div class="row">
-                <label><input type="checkbox" id="lowBandwidth"> Low bandwidth mode (prefer SD)</label>
-            </div>
-            <div class="row">
-                <label><input type="checkbox" id="autoReconnect"> Auto reconnect</label>
-            </div>
-            <div class="row">
-                <label>Buffer (seconds)</label>
-                <input id="bufferSize" type="number" min="5" max="60" />
-            </div>
-            <div class="row">
-                <button id="clearCache">Clear Cache</button>
-                <button id="importFile">Import Playlist File</button>
-            </div>
-            <div class="load-progress-container hidden">
-                <div class="load-progress-bar"></div>
-            </div>
-            <div class="row">
-                <button id="closeSettings" style="flex: 1;">Close</button>
-                <button id="saveSettings" style="flex: 1;">Save Settings</button>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label>Playlist Selection</label>
+                    <select id="playlistSelect" class="form-control">
+                        <option value="">Custom URL</option>
+                        <option value="IPTV">IPTV</option>
+                        <option value="XUMO">XUMO</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>Playlist URL</label>
+                    <div class="input-group">
+                        <input id="playlistUrl" type="text" class="form-control" placeholder="https://example.com/playlist.m3u8" />
+                        <button id="loadSelectedPlaylist" class="btn-secondary" title="Load selected default playlist">
+                            Load Selected
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="lowBandwidth">
+                        <span class="checkmark"></span>
+                        Low bandwidth mode (prefer SD)
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label class="checkbox-container">
+                        <input type="checkbox" id="autoReconnect">
+                        <span class="checkmark"></span>
+                        Auto reconnect
+                    </label>
+                </div>
+                
+                <div class="form-group">
+                    <label for="bufferSize">Buffer (seconds)</label>
+                    <input id="bufferSize" type="number" min="5" max="60" class="form-control" />
+                </div>
+                
+                <div class="button-group">
+                    <button id="clearCache" class="btn">Clear Cache</button>
+                    <button id="importFile" class="btn">Import Playlist File</button>
+                </div>
+                
+                <div class="load-progress-container hidden">
+                    <div class="load-progress-bar"></div>
+                </div>
+                
+                <div class="modal-footer">
+                    <button id="saveSettings" class="btn-primary">Save Settings</button>
+                </div>
             </div>
         </div>
     </div>
@@ -278,6 +299,23 @@
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js"></script>
     
     <!-- License Modal -->
+    <!-- Confirmation Modal -->
+    <div id="confirmationModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <h2><span class="about-icon">⚠️</span> Confirm Action</h2>
+                <button id="closeConfirmationModal" class="modal-close-btn" title="Close">✕</button>
+            </div>
+            <div class="modal-body">
+                <p id="confirmationMessage">Are you sure you want to perform this action?</p>
+                <div class="confirmation-buttons" style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 24px;">
+                    <button id="cancelConfirm" class="btn btn-secondary" style="min-width: 80px;">Cancel</button>
+                    <button id="confirmAction" class="btn btn-danger" style="min-width: 80px;">Confirm</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div id="licenseModal" class="modal">
         <div class="modal-content" style="max-width: 700px; max-height: 80vh;">
             <div class="modal-header">

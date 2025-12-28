@@ -266,8 +266,31 @@ ipcMain.handle("set-settings", async (event, payload) => {
 });
 
 ipcMain.handle("clear-cache", async () => {
-  store.set("cachedPlaylist", "");
-  return { ok: true };
+  try {
+    // Clear cached playlist
+    store.set("cachedPlaylist", "");
+    
+    // Clear favorites
+    store.set("favorites", []);
+    
+    // Clear favorites file if it exists
+    if (fs.existsSync(favoritesPath)) {
+      fs.unlinkSync(favoritesPath);
+    }
+    
+    // Clear logo cache
+    const userDataPath = app.getPath("userData");
+    const logosDir = path.join(userDataPath, "logos");
+    if (fs.existsSync(logosDir)) {
+      fs.rmSync(logosDir, { recursive: true, force: true });
+    }
+    
+    console.log("✓ Cache and favorites cleared");
+    return { ok: true };
+  } catch (error) {
+    console.error("Error clearing cache:", error);
+    return { ok: false, error: error.message };
+  }
 });
 
 ipcMain.handle("get-cached-playlist", async () => {
@@ -318,9 +341,39 @@ ipcMain.handle("toggle-favorite", async (event, channelId) => {
 });
 
 // Handle app uninstall - clear all cache and user data
+app.on('will-quit', () => {
+  // Don't clear favorites on quit, only on uninstall
+});
+
+// Handle uninstall - clear all data including favorites
+const handleUninstall = () => {
+  try {
+    // Clear all data including favorites
+    store.clear();
+    // Also delete the favorites file if it exists
+    if (fs.existsSync(favoritesPath)) {
+      fs.unlinkSync(favoritesPath);
+    }
+    console.log('✓ All app data cleared during uninstall');
+  } catch (error) {
+    console.error('Error during uninstall cleanup:', error);
+  }
+};
+
+// Listen for uninstall events
+if (process.platform === 'win32') {
+  // For Windows
+  app.on('window-all-closed', () => {
+    if (process.argv.includes('--uninstall')) {
+      handleUninstall();
+    }
+  });
+}
+
+// IPC Handlers
 ipcMain.handle("clear-all-app-data", async () => {
   try {
-    store.clear();
+    handleUninstall();
     console.log("All app data cleared on uninstall");
     return { ok: true };
   } catch (err) {

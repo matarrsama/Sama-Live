@@ -296,8 +296,38 @@
   function showMessage(text, timeout = 4000) {
     const el = $("#player-message");
     el.textContent = text;
-    el.style.display = text ? "block" : "none";
-    if (text && timeout) setTimeout(() => (el.style.display = "none"), timeout);
+    
+    // Clear any existing timeouts
+    if (window.messageTimeout) {
+      clearTimeout(window.messageTimeout);
+      window.messageTimeout = null;
+    }
+    
+    if (text) {
+      // Force reflow to ensure the transition works
+      void el.offsetHeight;
+      
+      // Add show class to make message visible
+      el.classList.add('show');
+      
+      // Set timeout to hide message
+      if (timeout) {
+        window.messageTimeout = setTimeout(() => {
+          el.classList.remove('show');
+          // Remove text after transition completes
+          setTimeout(() => {
+            el.textContent = '';
+          }, 300); // Match this with CSS transition duration
+        }, timeout);
+      }
+    } else {
+      // If no text, hide the message
+      el.classList.remove('show');
+      // Remove text after transition completes
+      setTimeout(() => {
+        el.textContent = '';
+      }, 300);
+    }
   }
 
   function showChannelsLoading(show) {
@@ -1266,9 +1296,8 @@
   const sidebarToggle = $("#sidebarToggle");
   const app = $("#app");
 
-  // Load sidebar collapsed state from localStorage
-  let sidebarCollapsed =
-    localStorage.getItem("sama-live_sidebar_collapsed") === "true";
+  // Always start with sidebar expanded
+  let sidebarCollapsed = false;
 
   function updateSidebarUI() {
     if (sidebarCollapsed) {
@@ -1282,6 +1311,9 @@
       sidebarToggle.textContent = "<";
       sidebarToggle.title = "Hide Sidebar";
     }
+    
+    // Save the current state to localStorage
+    localStorage.setItem("sama-live_sidebar_collapsed", sidebarCollapsed);
   }
 
   sidebarToggle.onclick = () => {
@@ -1371,9 +1403,13 @@
   // Settings modal
   $("#settingsBtn").onclick = () => {
     $("#settings").classList.remove("hidden");
+    $("#settings").classList.add("visible");
     $("#playlistUrl").focus();
   };
-  $("#closeSettings").onclick = () => $("#settings").classList.add("hidden");
+  $("#closeSettings").onclick = () => {
+    $("#settings").classList.add("hidden");
+    $("#settings").classList.remove("visible");
+  };
 
   // Handle input changes - if user types, show what they typed
   $("#playlistUrl").addEventListener("input", (e) => {
@@ -1777,16 +1813,80 @@
     console.error(errorMsg);
   }
 
-  $("#clearCache").onclick = async () => {
-    await window.api.clearCache();
-    state.channels = [];
-    buildList([]);
-    // Note: state.favorites is NOT cleared - favorite IDs are preserved
-    // They will reappear when you reload the playlist
-    buildFavorites();
-    showMessage(
-      "✓ Cache cleared (Favorites preserved - reload playlist to restore)",
-      3000
+  // Confirmation Modal Functions
+  function showConfirmation(message, onConfirm, onCancel = null) {
+    const modal = $("#confirmationModal");
+    const messageEl = $("#confirmationMessage");
+    const confirmBtn = $("#confirmAction");
+    const cancelBtn = $("#cancelConfirm");
+    const closeBtn = $("#closeConfirmationModal");
+
+    // Set the message
+    messageEl.textContent = message;
+
+    // Remove previous event listeners
+    const newConfirmBtn = confirmBtn.cloneNode(true);
+    const newCancelBtn = cancelBtn.cloneNode(true);
+    const newCloseBtn = closeBtn.cloneNode(true);
+
+    confirmBtn.parentNode.replaceChild(newConfirmBtn, confirmBtn);
+    cancelBtn.parentNode.replaceChild(newCancelBtn, cancelBtn);
+    closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
+
+    // Add new event listeners
+    newConfirmBtn.onclick = () => {
+      modal.classList.remove("visible");
+      if (typeof onConfirm === 'function') onConfirm();
+    };
+
+    newCancelBtn.onclick = () => {
+      modal.classList.remove("visible");
+      if (typeof onCancel === 'function') onCancel();
+    };
+
+    newCloseBtn.onclick = () => {
+      modal.classList.remove("visible");
+      if (typeof onCancel === 'function') onCancel();
+    };
+
+    // Close when clicking outside
+    modal.onclick = (e) => {
+      if (e.target === modal) {
+        modal.classList.remove("visible");
+        if (typeof onCancel === 'function') onCancel();
+      }
+    };
+
+    // Close with Escape key
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        modal.classList.remove("visible");
+        if (typeof onCancel === 'function') onCancel();
+        document.removeEventListener('keydown', handleKeyDown);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+
+    // Show the modal
+    modal.classList.remove("hidden");
+    modal.classList.add("visible");
+    modal.focus();
+  }
+
+  // Update clear cache button to use confirmation
+  $("#clearCache").onclick = () => {
+    showConfirmation(
+      "Are you sure you want to clear the cache? This will remove all cached data including your favorites list.",
+      async () => {
+        await window.api.clearCache();
+        state.channels = [];
+        state.favorites = new Set(); // Initialize as empty Set
+        state.favoriteOrder = []; // Also clear favorite order
+        buildList([]);
+        updateFavoritesUI(); // Update UI to reflect cleared favorites
+        showMessage("Cache and favorites cleared successfully");
+      }
     );
   };
 
