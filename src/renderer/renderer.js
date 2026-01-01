@@ -111,18 +111,71 @@
   const video = $("#video");
   let hls = null;
 
-  // Internet connectivity monitoring
+  // Enhanced Internet connectivity monitoring with multiple endpoints
+  const connectivityEndpoints = [
+    "https://www.google.com/favicon.ico",
+    "https://www.cloudflare.com/favicon.ico",
+    "https://www.github.com/favicon.ico",
+    "https://httpbin.org/get"
+  ];
+
   async function checkInternetConnectivity() {
+    const timeout = 3000; // Reduced timeout for faster detection
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
     try {
-      // Try to fetch a small, lightweight resource with short timeout
-      const response = await fetch("https://www.google.com/favicon.ico", {
-        method: "HEAD",
-        mode: "no-cors",
-        timeout: 5000,
+      // Try multiple endpoints with Promise.any for faster success detection
+      const promises = connectivityEndpoints.map(async (endpoint) => {
+        try {
+          const response = await fetch(endpoint, {
+            method: "HEAD",
+            mode: "no-cors",
+            signal: controller.signal,
+            cache: "no-cache"
+          });
+          return true;
+        } catch (err) {
+          return false;
+        }
       });
-      return true;
+
+      const result = await Promise.any(promises);
+      clearTimeout(timeoutId);
+      return result;
     } catch (err) {
+      clearTimeout(timeoutId);
       return false;
+    }
+  }
+
+  // Network quality monitoring
+  let networkQualityCheck = null;
+  let lastNetworkSpeed = null;
+
+  async function measureNetworkQuality() {
+    if (!state.current) return null;
+
+    try {
+      const startTime = performance.now();
+      const response = await fetch(state.current.url, {
+        method: "HEAD",
+        cache: "no-cache"
+      });
+      const endTime = performance.now();
+      const responseTime = endTime - startTime;
+
+      // Simple quality assessment based on response time
+      let quality = "good";
+      if (responseTime > 2000) quality = "poor";
+      else if (responseTime > 1000) quality = "fair";
+
+      lastNetworkSpeed = { responseTime, quality };
+      console.log(`Network quality: ${quality} (${responseTime.toFixed(0)}ms)`);
+      return lastNetworkSpeed;
+    } catch (err) {
+      lastNetworkSpeed = { responseTime: 9999, quality: "poor" };
+      return lastNetworkSpeed;
     }
   }
 
@@ -139,17 +192,21 @@
         state.isOnline = true;
         showMessage("✓ Internet connection restored", 2000);
 
+        // Measure network quality after reconnection
+        await measureNetworkQuality();
+
         // Auto-resume playback if auto-reconnect is enabled
         if (
           state.settings.autoReconnect &&
           state.wasPlayingBeforeOffline &&
           state.current
         ) {
-          console.log("Auto-resuming playback of:", state.current.name);
-          showMessage("Auto-resuming playback...", 2000);
-          setTimeout(() => {
-            startPlayback(state.current.url);
-          }, 1500);
+          console.log("Auto-resuming playback after reconnection");
+          showMessage("Resuming playback...", 1500);
+          // Reset retry count for fresh start
+          state.retryCount = 0;
+          state.retriesLeft = 3;
+          startPlayback(state.current.url);
         }
       } else if (!isOnline && state.isOnline) {
         // Internet is down
@@ -163,8 +220,13 @@
             3000
           );
           video.pause();
-          showSpinner(true);
         }
+      }
+
+      // Periodic network quality check during playback
+      if (isOnline && state.current && !video.paused && Math.random() < 0.2) {
+        // 20% chance each check to avoid too frequent measurements
+        await measureNetworkQuality();
       }
     }, 5000); // Check every 5 seconds
   }
@@ -1364,7 +1426,7 @@
       showBufferingIndicator("Loading");
       attachBufferingVideoListeners();
 
-      // Optimize HLS config based on bandwidth settings
+      // Optimize HLS config based on bandwidth settings and network quality
       const hlsConfig = {
         maxBufferLength: buffer,
         maxMaxBufferLength: buffer * 2,
@@ -1372,13 +1434,39 @@
         lowLatencyMode: false, // Disable low latency for stability
         enableWorker: true,
         loader: window.Hls.DefaultConfig.loader,
+        fragLoadingTimeOut: 20000, // 20 seconds fragment loading timeout
+        fragLoadingMaxRetry: 4, // Increased retry count
+        manifestLoadingTimeOut: 15000, // 15 seconds manifest loading timeout
+        manifestLoadingMaxRetry: 3,
+        maxBufferHole: 0.5, // Allow smaller gaps in buffer
+        highBufferWatchdogPeriod: 2, // Check buffer every 2 seconds
+        nudgeOffset: 0.1, // Small nudge to recover from stalls
+        nudgeMaxRetry: 5, // Maximum nudge attempts
+        backBufferLength: 30, // Keep 30 seconds behind current position
       };
+
+      // Adaptive configuration based on network quality
+      if (lastNetworkSpeed?.quality === "poor") {
+        hlsConfig.maxBufferLength = Math.max(buffer, 40);
+        hlsConfig.maxMaxBufferLength = Math.max(buffer * 2, 80);
+        hlsConfig.fragLoadingTimeOut = 30000; // Longer timeout for poor networks
+        hlsConfig.fragLoadingMaxRetry = 6; // More retries for poor networks
+        hlsConfig.maxBufferHole = 1.0; // Allow larger gaps
+        console.log("Using HLS config for poor network quality");
+      } else if (lastNetworkSpeed?.quality === "fair") {
+        hlsConfig.maxBufferLength = Math.max(buffer, 30);
+        hlsConfig.maxMaxBufferLength = Math.max(buffer * 2, 60);
+        hlsConfig.fragLoadingTimeOut = 25000;
+        hlsConfig.fragLoadingMaxRetry = 5;
+        console.log("Using HLS config for fair network quality");
+      }
 
       // More aggressive buffering for low bandwidth mode
       if (settings.lowBandwidth) {
-        hlsConfig.maxBufferLength = Math.max(buffer, 30);
-        hlsConfig.maxMaxBufferLength = Math.max(buffer * 2, 60);
-        hlsConfig.maxBufferHole = 0.5; // Allow smaller gaps
+        hlsConfig.maxBufferLength = Math.max(hlsConfig.maxBufferLength, 30);
+        hlsConfig.maxMaxBufferLength = Math.max(hlsConfig.maxMaxBufferLength, 60);
+        hlsConfig.maxBufferHole = 0.5;
+        console.log("Applied low bandwidth HLS settings");
       }
 
       hls = new window.Hls(hlsConfig);
@@ -1394,28 +1482,111 @@
 
       hls.on(window.Hls.Events.ERROR, (event, data) => {
         console.error("HLS error", data);
-        // Try native playback as fallback
+        
+        // Enhanced error handling with specific recovery strategies
         if (data.fatal) {
-          console.log("HLS fatal error, trying native playback");
-          tryNativePlayback(url);
+          console.log("HLS fatal error, trying recovery strategies");
+          handleFatalHLSError(data, url);
         } else {
-          // Non-fatal errors (like buffer stalls) - just log them
-          console.warn("Non-fatal HLS error, continuing playback");
-
-          const details = String(data && data.details ? data.details : "");
-          if (
-            details.includes("BUFFER_STALLED") ||
-            details.includes("BUFFER_NUDGE") ||
-            details.includes("FRAG_LOAD")
-          ) {
-            showBufferingIndicator("Buffering");
-          }
+          // Non-fatal errors with specific handling
+          handleNonFatalHLSError(data);
         }
       });
     } else {
       // For non-HLS streams (MPEG-TS, HTTP streams, etc.), use native playback
       console.log("Using native playback for:", url);
       tryNativePlayback(url);
+    }
+  }
+
+  // Enhanced HLS error handling functions
+  function handleFatalHLSError(data, url) {
+    const errorDetails = String(data && data.details ? data.details : "");
+    console.log("Fatal HLS error:", errorDetails);
+
+    // Try different recovery strategies based on error type
+    if (errorDetails.includes("MANIFEST_LOAD_ERROR") || errorDetails.includes("MANIFEST_PARSING_ERROR")) {
+      // Manifest issues - try native playback immediately
+      console.log("Manifest error, switching to native playback");
+      tryNativePlayback(url);
+    } else if (errorDetails.includes("NETWORK_ERROR") || errorDetails.includes("FRAG_LOAD_ERROR")) {
+      // Network errors - retry with exponential backoff
+      console.log("Network error, retrying with backoff");
+      retryWithBackoff(url, "hls");
+    } else {
+      // Other fatal errors - try native playback as fallback
+      console.log("Other fatal error, trying native playback");
+      tryNativePlayback(url);
+    }
+  }
+
+  function handleNonFatalHLSError(data) {
+    const errorDetails = String(data && data.details ? data.details : "");
+    
+    if (errorDetails.includes("BUFFER_STALLED") || errorDetails.includes("BUFFER_NUDGE")) {
+      showBufferingIndicator("Buffering");
+      
+      // Try to recover from buffer stall
+      if (video && !video.paused) {
+        const currentTime = video.currentTime;
+        console.log("Attempting to recover from buffer stall");
+        
+        // Small nudge forward to try to unstick the buffer
+        video.currentTime = currentTime + 0.1;
+        
+        // If still stuck after 2 seconds, try more aggressive recovery
+        setTimeout(() => {
+          if (video && video.currentTime === currentTime + 0.1) {
+            console.log("Buffer stall recovery failed, trying restart");
+            video.currentTime = currentTime;
+            video.play().catch(err => console.log("Play recovery failed:", err));
+          }
+        }, 2000);
+      }
+    } else if (errorDetails.includes("FRAG_LOAD") || errorDetails.includes("FRAG_LOAD_TIMEOUT")) {
+      showBufferingIndicator("Loading fragment");
+      
+      // Fragment loading issues - may indicate network problems
+      if (!state.networkRetryScheduled) {
+        state.networkRetryScheduled = true;
+        setTimeout(() => {
+          state.networkRetryScheduled = false;
+          console.log("Fragment load issues detected, checking network quality");
+          measureNetworkQuality();
+        }, 5000);
+      }
+    } else {
+      console.warn("Non-fatal HLS error:", errorDetails);
+    }
+  }
+
+  function retryWithBackoff(url, playbackType = "hls") {
+    const baseDelay = 1000; // 1 second base delay
+    const maxDelay = 30000; // 30 seconds max delay
+    const retryCount = (state.retryCount || 0) + 1;
+    state.retryCount = retryCount;
+    
+    // Exponential backoff with jitter
+    const exponentialDelay = Math.min(baseDelay * Math.pow(2, retryCount - 1), maxDelay);
+    const jitter = Math.random() * 1000; // Add up to 1 second of jitter
+    const delay = exponentialDelay + jitter;
+    
+    console.log(`Retrying ${playbackType} playback in ${delay.toFixed(0)}ms (attempt ${retryCount})`);
+    
+    if (retryCount <= 5) {
+      createTimeout(() => {
+        if (state.current && state.current.url === url) {
+          console.log(`Executing retry attempt ${retryCount} for ${playbackType}`);
+          if (playbackType === "hls") {
+            attemptLoad(url);
+          } else {
+            tryNativePlayback(url);
+          }
+        }
+      }, delay);
+    } else {
+      console.log("Max retries reached, giving up");
+      handlePlaybackError({ message: "Max retries exceeded" });
     }
   }
 
@@ -1427,13 +1598,19 @@
     showBufferingIndicator("Loading");
     attachBufferingVideoListeners();
 
+    // Adaptive timeout based on network quality
+    const timeout = lastNetworkSpeed?.quality === "poor" ? 15000 : 
+                    lastNetworkSpeed?.quality === "fair" ? 12000 : 8000;
+    
+    console.log(`Using ${timeout}ms timeout for native playback (network: ${lastNetworkSpeed?.quality || 'unknown'})`);
+
     // Set timeout to detect if stream doesn't load
     const loadTimeout = createTimeout(() => {
       if (video.networkState === 0 || video.networkState === 3) {
         console.warn("Stream loading timeout, trying alternate method");
         handlePlaybackError({ message: "Stream load timeout" });
       }
-    }, 8000);
+    }, timeout);
 
     const playPromise = video.play();
     showSpinner(false);
@@ -1480,8 +1657,27 @@
   function handlePlaybackError(data) {
     showSpinner(false);
     hideBufferingIndicator();
+    
+    const error = data?.message || data?.error || "Unknown error";
+    console.error("Playback error:", error);
+    
+    // Use enhanced retry system if auto-reconnect is enabled
+    if (state.settings.autoReconnect) {
+      const retryCount = (state.retryCount || 0) + 1;
+      
+      if (retryCount <= 5) {
+        console.log(`Initiating enhanced retry ${retryCount}/5 for error: ${error}`);
+        retryWithBackoff(state.current.url, "auto");
+        return;
+      } else {
+        console.log("Max retries exceeded in handlePlaybackError");
+        state.retryCount = 0; // Reset for future attempts
+      }
+    }
+    
+    // Fallback to original logic if auto-reconnect is disabled or max retries exceeded
     state.retriesLeft = (state.retriesLeft || 3) - 1;
-    if (state.retriesLeft > 0 && state.settings.autoReconnect) {
+    if (state.retriesLeft > 0) {
       showMessage(
         `Playback failed, retrying (${3 - state.retriesLeft + 1})...`
       );
@@ -1490,7 +1686,7 @@
         attemptLoad(state.current.url);
       }, 1500);
     } else {
-      // mark failure
+      // Mark failure
       const id = state.current && state.current.id;
       if (id) {
         state.failureCounts[id] = (state.failureCounts[id] || 0) + 1;

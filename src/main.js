@@ -27,6 +27,16 @@ const store = new Store({
     },
     firstRun: { type: "boolean", default: true },
     lastAppVersion: { type: "string", default: "" },
+    windowState: {
+      type: "object",
+      default: {
+        width: 1200,
+        height: 800,
+        x: undefined,
+        y: undefined,
+        isMaximized: false,
+      },
+    },
   },
 });
 
@@ -175,10 +185,81 @@ function setupAutoUpdater() {
   });
 }
 
-function createWindow() {
-  mainWindow = new BrowserWindow({
+// Window state management
+function saveWindowState(window) {
+  if (!window) return;
+  
+  try {
+    const bounds = window.getBounds();
+    const isMaximized = window.isMaximized();
+    
+    // Only save position if window is not maximized
+    const windowState = {
+      width: bounds.width,
+      height: bounds.height,
+      isMaximized: isMaximized,
+    };
+    
+    // Only save x,y if window is not maximized and not in fullscreen
+    if (!isMaximized && !window.isFullScreen()) {
+      windowState.x = bounds.x;
+      windowState.y = bounds.y;
+    }
+    
+    store.set("windowState", windowState);
+    console.log("Window state saved:", windowState);
+  } catch (err) {
+    console.warn("Failed to save window state:", err.message);
+  }
+}
+
+function getValidWindowBounds(savedState) {
+  const { screen } = require("electron");
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { workArea } = primaryDisplay;
+  
+  // Default bounds if no saved state or invalid
+  const defaultBounds = {
     width: 1200,
     height: 800,
+    x: workArea.x + Math.floor((workArea.width - 1200) / 2),
+    y: workArea.y + Math.floor((workArea.height - 800) / 2),
+  };
+  
+  if (!savedState) {
+    return defaultBounds;
+  }
+  
+  // Ensure window is within screen bounds
+  const bounds = {
+    width: Math.max(800, Math.min(savedState.width || 1200, workArea.width)),
+    height: Math.max(600, Math.min(savedState.height || 800, workArea.height)),
+  };
+  
+  // Position validation
+  if (savedState.x !== undefined && savedState.y !== undefined) {
+    bounds.x = Math.max(workArea.x, Math.min(savedState.x, workArea.x + workArea.width - bounds.width));
+    bounds.y = Math.max(workArea.y, Math.min(savedState.y, workArea.y + workArea.height - bounds.height));
+  } else {
+    bounds.x = defaultBounds.x;
+    bounds.y = defaultBounds.y;
+  }
+  
+  return bounds;
+}
+
+function createWindow() {
+  const savedWindowState = store.get("windowState");
+  const bounds = getValidWindowBounds(savedWindowState);
+  
+  console.log("Creating window with bounds:", bounds);
+
+  mainWindow = new BrowserWindow({
+    width: bounds.width,
+    height: bounds.height,
+    x: bounds.x,
+    y: bounds.y,
+    show: false, // Don't show until ready-to-show
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -186,11 +267,47 @@ function createWindow() {
     },
   });
 
+  // Restore maximized state if saved
+  if (savedWindowState?.isMaximized) {
+    mainWindow.maximize();
+  }
+
   mainWindow.loadFile(path.join(__dirname, "renderer", "index.html"));
+  
   // Remove default menu (File, Edit, View, Window, Help)
   Menu.setApplicationMenu(null);
-  // fast startup: show when ready
-  mainWindow.once("ready-to-show", () => mainWindow.show());
+  
+  // Show window when ready to prevent visual flicker
+  mainWindow.once("ready-to-show", () => {
+    mainWindow.show();
+    
+    // If window was maximized, ensure it's properly maximized after showing
+    if (savedWindowState?.isMaximized) {
+      mainWindow.maximize();
+    }
+  });
+
+  // Setup window state saving
+  let saveTimeout;
+  
+  const debouncedSave = () => {
+    if (saveTimeout) clearTimeout(saveTimeout);
+    saveTimeout = setTimeout(() => {
+      saveWindowState(mainWindow);
+    }, 500); // Debounce saves to avoid too frequent writes
+  };
+
+  // Save window state on resize and move
+  mainWindow.on("resize", debouncedSave);
+  mainWindow.on("move", debouncedSave);
+  mainWindow.on("maximize", debouncedSave);
+  mainWindow.on("unmaximize", debouncedSave);
+  
+  // Save state when window is closing
+  mainWindow.on("close", () => {
+    saveWindowState(mainWindow);
+    if (saveTimeout) clearTimeout(saveTimeout);
+  });
 }
 
 // Single instance
@@ -533,10 +650,17 @@ ipcMain.handle("get-cached-logo", async (event, logoUrl) => {
 ipcMain.handle("check-for-updates", async () => {
   try {
     const result = await autoUpdater.checkForUpdates();
+    const currentVersion = app.getVersion();
+    const availableVersion = result?.updateInfo?.version;
+    
+    // Only consider update available if versions are different
+    const updateAvailable = availableVersion && availableVersion !== currentVersion;
+    
     return {
       ok: true,
-      updateAvailable: result?.updateInfo ? true : false,
-      version: result?.updateInfo?.version,
+      updateAvailable: updateAvailable,
+      version: availableVersion,
+      currentVersion: currentVersion,
     };
   } catch (err) {
     return { ok: false, error: err.message };
