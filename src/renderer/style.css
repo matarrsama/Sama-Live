@@ -608,7 +608,7 @@ body {
 }
 
 #topbar {
-  padding: 16px 20px;
+  padding: 10px 16px;
   background: var(--bg-secondary);
   border-bottom: 1px solid var(--border);
   display: flex;
@@ -618,14 +618,14 @@ body {
 }
 
 #topbar button {
-  padding: 8px 16px;
+  padding: 6px 12px;
   background: var(--accent);
   color: white;
   border: none;
   border-radius: 6px;
   cursor: pointer;
   font-weight: 500;
-  font-size: 13px;
+  font-size: 12px;
   transition: all 0.2s ease;
 }
 
@@ -639,20 +639,22 @@ body {
 }
 
 #qualitySelect {
-  padding: 8px 28px 8px 12px;
+  padding: 6px 28px 6px 12px;
   background: var(--accent);
   color: white;
   border: none;
   border-radius: 6px;
   cursor: pointer;
   font-weight: 500;
-  font-size: 13px;
+  font-size: 12px;
   transition: all 0.2s ease;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='white' d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 28px;
+  height: 32px; /* Fixed height to match buttons */
+  box-sizing: border-box;
 }
 
 #qualitySelect:hover {
@@ -1886,19 +1888,20 @@ body {
 }
 
 .volume-btn-nav {
-  padding: 8px 12px;
+  padding: 6px 12px;
   border: none;
   background: var(--bg-tertiary);
   color: var(--text-primary);
   border-radius: 6px;
   cursor: pointer;
-  font-size: 18px;
+  font-size: 16px;
   transition: all 0.2s ease;
+  height: 32px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
   min-width: 44px;
-  height: 40px;
 }
 
 .volume-btn-nav:hover {
@@ -2326,4 +2329,41 @@ body {
   .section h3 {
     font-size: 12px;
   }
+}
+
+/* Custom Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px; /* Thinner scrollbar */
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary); /* Dark track */
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--accent); /* Blue thumb matching theme */
+  border-radius: 4px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-hover); /* Darker blue on hover */
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: var(--accent-hover); /* Darker blue when active */
+}
+
+/* Light mode scrollbar adjustments */
+:root.light-mode ::-webkit-scrollbar-track {
+  background: var(--bg-tertiary); /* Lighter track for light mode */
+}
+
+:root.light-mode ::-webkit-scrollbar-thumb {
+  background: var(--accent); /* Keep blue thumb in light mode */
+}
+
+:root.light-mode ::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-hover); /* Darker blue on hover in light mode */
 }

@@ -1309,6 +1309,22 @@
     playbackTimeouts = [];
   }
 
+  function hideAllErrorNotifications() {
+    // Remove all update notifications (including error notifications)
+    const notifications = document.querySelectorAll(".update-notification");
+    notifications.forEach(notification => notification.remove());
+    
+    // Remove any minimized indicators
+    const indicators = document.querySelectorAll(".update-minimized-indicator");
+    indicators.forEach(indicator => indicator.remove());
+    
+    // Clear any message timeout
+    if (window.messageTimeout) {
+      clearTimeout(window.messageTimeout);
+      window.messageTimeout = null;
+    }
+  }
+
   // Keep track of video event listeners for cleanup
   let videoListeners = [];
 
@@ -1710,20 +1726,34 @@
     if (!video.paused) video.pause();
   };
   $("#stopBtn").onclick = () => {
-  stopConnectivityMonitoring();
-  cleanupPlayer();
-  showSpinner(false);
-  hideBufferingIndicator();
-  
-  // Reset to fresh start state
-  state.current = null;
-  state.retriesLeft = 3;
-  $("#nowplaying").textContent = "";
-  $("#player-welcome").classList.remove("hidden");
-  video.src = "";
-  
-  showMessage("Stopped");
-};
+    stopConnectivityMonitoring();
+    cleanupPlayer();
+    showSpinner(false);
+    hideBufferingIndicator();
+    
+    // Reset to fresh start state
+    state.current = null;
+    state.retriesLeft = 3;
+    state.retryCount = 0; // Reset enhanced retry counter
+    state.networkRetryScheduled = false; // Clear network retry flag
+    state.wasPlayingBeforeOffline = false; // Reset offline state
+    $("#nowplaying").textContent = "";
+    $("#player-welcome").classList.remove("hidden");
+    video.src = "";
+    
+    // Clear all error messages and notifications
+    showMessage(""); // Clear current message
+    hideAllErrorNotifications(); // Clear any error notifications
+    
+    // Clear any pending timeouts
+    clearAllTimeouts();
+    
+    // Reset failure counts for all channels
+    state.failureCounts = {};
+    
+    console.log("Stop button pressed - All errors cleared and state reset");
+    showMessage("Stopped - All errors cleared", 2000);
+  };
 
   // Quality selector
   $("#qualitySelect").onchange = (e) => {
@@ -1774,9 +1804,29 @@
 
   sectionHeader.style.cursor = "pointer";
   sectionHeader.onclick = () => {
+    // Toggle collapse state
     favoritesCollapsed = !favoritesCollapsed;
     localStorage.setItem("sama-live_favorites_collapsed", favoritesCollapsed);
     updateFavoritesUI();
+    
+    // Auto-scroll to favorites section with a delay to ensure UI updates
+    setTimeout(() => {
+      const sidebar = $("#sidebar");
+      if (sidebar && favoritesSection) {
+        console.log("Attempting to scroll to favorites");
+        console.log("Sidebar scrollHeight:", sidebar.scrollHeight);
+        console.log("Sidebar clientHeight:", sidebar.clientHeight);
+        console.log("Current scrollTop:", sidebar.scrollTop);
+        
+        // Simple approach: scroll to top (position 0) since favorites is at the top
+        sidebar.scrollTo({
+          top: 0,
+          behavior: "smooth"
+        });
+        
+        console.log("Scrolled to top");
+      }
+    }, 100); // Small delay to allow UI to update
   };
 
   updateFavoritesUI();
