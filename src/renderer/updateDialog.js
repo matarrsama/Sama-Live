@@ -284,7 +284,7 @@ class UpdateDialog {
     // Update button texts during download
     downloadBtn.textContent = "Downloading";
     downloadBtn.disabled = true;
-    laterBtn.textContent = "Cancel Download";
+    laterBtn.textContent = "Minimize";
 
     // Show minimize button
     if (minimizeBtn) {
@@ -294,11 +294,11 @@ class UpdateDialog {
       );
     }
 
-    // Change later button to cancel download
-    const cancelHandler = () => this.cancelDownload(notification);
+    // Change later button to minimize download
+    const minimizeHandler = () => this.minimizeDownloadWindow(notification);
     laterBtn.removeEventListener("click", laterBtn.laterListener);
-    laterBtn.addEventListener("click", cancelHandler);
-    laterBtn.laterListener = cancelHandler;
+    laterBtn.addEventListener("click", minimizeHandler);
+    laterBtn.laterListener = minimizeHandler;
 
     const result = await window.electronAPI.startUpdateDownload();
     if (!result.ok) {
@@ -352,7 +352,7 @@ class UpdateDialog {
   resetDownloadButtons(notification, downloadBtn, laterBtn) {
     downloadBtn.textContent = "Download & Update";
     downloadBtn.disabled = false;
-    laterBtn.textContent = "Later";
+    laterBtn.textContent = "Minimize";
 
     // Clear progress bar if it exists
     const progressContainer = notification.querySelector(".progress-container");
