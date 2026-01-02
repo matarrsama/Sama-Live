@@ -190,8 +190,18 @@
         // Internet is back!
         console.log("Internet connection restored");
         state.isOnline = true;
-        showMessage("✓ Internet connection restored", 2000);
-
+        
+        // Clear any offline timeout
+        if (state.offlineTimeout) {
+          clearTimeout(state.offlineTimeout);
+          state.offlineTimeout = null;
+        }
+        
+        // Only show message if we were actually offline for more than 2 seconds
+        if (state.offlineStartTime && (Date.now() - state.offlineStartTime) > 2000) {
+          showMessage("✓ Internet connection restored", 2000);
+        }
+        
         // Measure network quality after reconnection
         await measureNetworkQuality();
 
@@ -202,25 +212,36 @@
           state.current
         ) {
           console.log("Auto-resuming playback after reconnection");
-          showMessage("Resuming playback...", 1500);
+          
+          // Only show resuming message if offline was noticeable
+          if (!state.offlineStartTime || (Date.now() - state.offlineStartTime) > 2000) {
+            showMessage("Resuming playback...", 1500);
+          }
+          
           // Reset retry count for fresh start
           state.retryCount = 0;
           state.retriesLeft = 3;
           startPlayback(state.current.url);
         }
+        
+        state.offlineStartTime = null;
       } else if (!isOnline && state.isOnline) {
-        // Internet is down
-        console.log("Internet connection lost");
+        // Internet is down - start grace period
+        console.log("Internet connection lost - starting grace period");
         state.isOnline = false;
+        state.offlineStartTime = Date.now();
         state.wasPlayingBeforeOffline = !video.paused;
 
-        if (state.wasPlayingBeforeOffline) {
-          showMessage(
-            "⚠ Internet connection lost. Waiting for connection...",
-            3000
-          );
-          video.pause();
-        }
+        // Wait 2 seconds before actually treating it as offline (grace period)
+        state.offlineTimeout = setTimeout(() => {
+          if (!state.isOnline && state.wasPlayingBeforeOffline) {
+            showMessage(
+              "⚠ Internet connection lost. Waiting for connection...",
+              3000
+            );
+            video.pause();
+          }
+        }, 2000); // 2 second grace period
       }
 
       // Periodic network quality check during playback
@@ -237,6 +258,15 @@
       state.connectivityCheckInterval = null;
       console.log("Stopped connectivity monitoring");
     }
+    
+    // Clear offline timeout if exists
+    if (state.offlineTimeout) {
+      clearTimeout(state.offlineTimeout);
+      state.offlineTimeout = null;
+    }
+    
+    // Reset offline state
+    state.offlineStartTime = null;
   }
 
   function showSpinner(show) {
@@ -2804,7 +2834,7 @@
   $("#dismissDisclaimer").onclick = () =>
     $("#disclaimer").classList.add("hidden");
 
-  // Volume persistence
+  // Volume persistences
   video.addEventListener("volumechange", async () => {
     state.volume = video.volume;
     await window.api.setVolume(video.volume);
@@ -2813,5 +2843,3 @@
   // load
   loadInitialData();
 })();
-
-
