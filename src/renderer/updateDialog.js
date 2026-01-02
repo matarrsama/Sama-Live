@@ -4,6 +4,7 @@ class UpdateDialog {
     this.isUpdateAvailable = false;
     this.isDownloading = false;
     this.isUpdateDownloaded = false;
+    this.downloadCancelled = false;
     this.updateVersion = null;
     this.setupListeners();
     
@@ -22,18 +23,37 @@ class UpdateDialog {
 
     // Listen for download progress
     window.electronAPI.onUpdateDownloadProgress((data) => {
+      // Don't show progress if download was cancelled
+      if (this.downloadCancelled) {
+        return;
+      }
       console.log(`📊 Download progress: ${data.percent}%`);
       this.updateDownloadProgress(data.percent);
     });
 
     // Listen for update downloaded
     window.electronAPI.onUpdateDownloaded(() => {
+      // Don't show ready notification if download was cancelled
+      if (this.downloadCancelled) {
+        return;
+      }
       console.log("✅ Update downloaded and ready to install");
       this.showUpdateReadyNotification();
     });
 
+    // Listen for update cancelled
+    window.api.on("update-cancelled", () => {
+      console.log("🚫 Download cancelled event received");
+      this.downloadCancelled = true;
+      this.isDownloading = false;
+    });
+
     // Listen for update error
     window.electronAPI.onUpdateError((data) => {
+      // Don't show error if download was cancelled
+      if (this.downloadCancelled) {
+        return;
+      }
       console.error("❌ Update error:", data);
       this.showErrorNotification(data.message);
     });
@@ -259,6 +279,7 @@ class UpdateDialog {
 
   async downloadUpdate(notification, downloadBtn, laterBtn, minimizeBtn) {
     this.isDownloading = true;
+    this.downloadCancelled = false;
 
     // Update button texts during download
     downloadBtn.textContent = "Downloading";
@@ -288,6 +309,7 @@ class UpdateDialog {
 
   cancelDownload(notification) {
     this.isDownloading = false;
+    this.downloadCancelled = true;
     
     // Call the cancel download handler
     window.electronAPI.cancelUpdateDownload().then(() => {
@@ -320,6 +342,11 @@ class UpdateDialog {
 
     // Dismiss the notification
     this.dismissNotification(notification);
+    
+    // Reset cancel flag after a short delay to allow for proper cleanup
+    setTimeout(() => {
+      this.downloadCancelled = false;
+    }, 1000);
   }
 
   resetDownloadButtons(notification, downloadBtn, laterBtn) {
@@ -334,7 +361,7 @@ class UpdateDialog {
     }
   }
 
-  installUpdate(notification) {
+  async installUpdate(notification) {
     // Clear the update ready state
     localStorage.removeItem("sama-live_update_ready");
     
@@ -386,7 +413,29 @@ class UpdateDialog {
     if (laterBtn) laterBtn.style.display = "none";
 
     // Call the install update
-    window.electronAPI.installUpdate();
+    const result = await window.electronAPI.installUpdate();
+    
+    if (!result.ok) {
+      console.error("❌ Install failed:", result.error);
+      
+      // Show error state
+      if (icon) icon.textContent = "❌";
+      if (icon) icon.classList.remove("spin-animation");
+      if (title) title.textContent = "Install Failed";
+      if (message) message.textContent = result.error;
+      
+      if (installBtn) {
+        installBtn.textContent = "Retry Install";
+        installBtn.disabled = false;
+        installBtn.style.opacity = "1";
+        installBtn.style.cursor = "pointer";
+      }
+      
+      // Show error notification
+      this.showErrorNotification(result.error);
+      
+      return;
+    }
   }
 
   dismissNotification(element) {

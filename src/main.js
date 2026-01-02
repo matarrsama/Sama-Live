@@ -27,6 +27,14 @@ const store = new Store({
     },
     firstRun: { type: "boolean", default: true },
     lastAppVersion: { type: "string", default: "" },
+    updateState: {
+      type: "object",
+      default: {
+        isDownloading: false,
+        isInstalling: false,
+        downloadedVersion: null,
+      },
+    },
     windowState: {
       type: "object",
       default: {
@@ -125,6 +133,23 @@ if (isUninstalling) {
   process.exit(0); // Exit immediately
 }
 
+// Check for existing downloaded update on startup
+function checkForDownloadedUpdate() {
+  const updateState = store.get("updateState") || {};
+  if (updateState.downloadedVersion && updateState.isInstalling) {
+    console.log(`🔄 Found downloaded update: ${updateState.downloadedVersion}`);
+    
+    // Send update ready notification to renderer
+    setTimeout(() => {
+      if (mainWindow) {
+        mainWindow.webContents.send("update-downloaded", {
+          version: updateState.downloadedVersion,
+        });
+      }
+    }, 2000); // Wait for renderer to be ready
+  }
+}
+
 // Configure Auto-Updater
 function setupAutoUpdater() {
   console.log("🔄 Initializing auto-updater...");
@@ -167,26 +192,56 @@ function setupAutoUpdater() {
     if (mainWindow) {
       mainWindow.webContents.send("update-download-progress", {
         percent: Math.round(progressObj.percent),
-        bytesPerSecond: progressObj.bytesPerSecond,
+        transferred: progressObj.transferred,
+        total: progressObj.total,
       });
     }
+    const updateState = store.get("updateState") || {};
+    updateState.isDownloading = true;
+    store.set("updateState", updateState);
   });
 
   // Event: Update downloaded
-  autoUpdater.on("update-downloaded", () => {
+  autoUpdater.on("update-downloaded", (info) => {
     console.log("✅ Update downloaded - will install on app quit");
+    const updateState = store.get("updateState") || {};
+    updateState.isDownloading = false;
+    updateState.isInstalling = true;
+    updateState.downloadedVersion = info.version;
+    store.set("updateState", updateState);
+    
     if (mainWindow) {
-      mainWindow.webContents.send("update-downloaded");
+      mainWindow.webContents.send("update-downloaded", {
+        version: info.version,
+      });
     }
   });
 
   // Event: Error during update
   autoUpdater.on("error", (error) => {
     console.error("❌ Updater error:", error);
+    const updateState = store.get("updateState") || {};
+    updateState.isDownloading = false;
+    updateState.isInstalling = false;
+    store.set("updateState", updateState);
+    
     if (mainWindow) {
       mainWindow.webContents.send("update-error", {
-        message: error.message,
+        message: error.message || "Unknown update error occurred",
       });
+    }
+  });
+
+  // Event: Update installed
+  autoUpdater.on("update-installed", () => {
+    console.log("✅ Update installed successfully");
+    const updateState = store.get("updateState") || {};
+    updateState.isInstalling = false;
+    updateState.downloadedVersion = null;
+    store.set("updateState", updateState);
+    
+    if (mainWindow) {
+      mainWindow.webContents.send("update-installed");
     }
   });
 }
@@ -333,6 +388,9 @@ app.whenReady().then(() => {
   handlePostUpdateCleanup();
   createWindow();
   setupAutoUpdater();
+  
+  // Check for existing downloaded updates
+  checkForDownloadedUpdate();
 
   app.on("activate", function () {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -673,68 +731,75 @@ ipcMain.handle("check-for-updates", async () => {
   }
 });
 
-let downloadController = null;
-let isDownloadActive = false;
+let downloadCancelled = false;
 
 ipcMain.handle("start-update-download", async () => {
   try {
-    // Create abort controller for this download
-    downloadController = new AbortController();
-    isDownloadActive = true;
+    // Reset cancel flag
+    downloadCancelled = false;
     
-    // Start the download with abort capability
+    // Start the download
     const downloadPromise = autoUpdater.downloadUpdate();
     
     // Handle the download completion
     downloadPromise
       .then(() => {
-        isDownloadActive = false;
-        downloadController = null;
+        if (!downloadCancelled) {
+          console.log("Download completed successfully");
+        }
       })
       .catch((err) => {
-        isDownloadActive = false;
-        downloadController = null;
-        if (err.name !== 'AbortError') {
+        if (!downloadCancelled) {
           console.error("Download failed:", err);
         }
       });
     
     return { ok: true };
   } catch (err) {
-    isDownloadActive = false;
-    downloadController = null;
     return { ok: false, error: err.message };
   }
 });
 
 ipcMain.handle("cancel-update-download", async () => {
   try {
-    if (isDownloadActive && downloadController) {
-      // Abort the download
-      downloadController.abort();
-      isDownloadActive = false;
-      downloadController = null;
-      
-      console.log("Update download cancelled by user");
-      
-      // Reset autoUpdater state
-      autoUpdater.updateConfigPath = null;
-      autoUpdater.checkForUpdatesAndNotify();
-      
-      return { ok: true };
-    } else {
-      console.log("No active download to cancel");
-      return { ok: true };
+    // Set the cancel flag
+    downloadCancelled = true;
+    
+    console.log("Update download cancelled by user");
+    
+    // Clear any pending update notifications
+    if (mainWindow) {
+      mainWindow.webContents.send("update-cancelled");
     }
+    
+    return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };
   }
 });
 
 ipcMain.handle("install-update", async () => {
-  // Quit and install the update
-  autoUpdater.quitAndInstall(false, true);
-  return { ok: true };
+  try {
+    const updateState = store.get("updateState") || {};
+    
+    // Check if we have a valid downloaded update
+    if (!updateState.downloadedVersion || !updateState.isInstalling) {
+      console.log("❌ No valid update available to install");
+      return { 
+        ok: false, 
+        error: "No valid update available, can't quit and install" 
+      };
+    }
+    
+    console.log(`🔄 Installing update: ${updateState.downloadedVersion}`);
+    
+    // Quit and install the update
+    autoUpdater.quitAndInstall(false, true);
+    return { ok: true };
+  } catch (err) {
+    console.error("❌ Install error:", err);
+    return { ok: false, error: err.message };
+  }
 });
 
 ipcMain.handle("get-app-version", async () => {
