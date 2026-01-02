@@ -1866,8 +1866,9 @@
   const sidebarToggle = $("#sidebarToggle");
   const app = $("#app");
 
-  // Always start with sidebar expanded
+  // Always start with sidebar expanded (ignore saved state for initial load)
   let sidebarCollapsed = false;
+  let manuallyHidden = false; // Always start with manual hide state cleared
 
   function updateSidebarUI() {
     if (sidebarCollapsed) {
@@ -1887,12 +1888,38 @@
   }
 
   sidebarToggle.onclick = () => {
+    const wasCollapsed = sidebarCollapsed;
     sidebarCollapsed = !sidebarCollapsed;
+    
+    // Track if this was a manual hide action
+    if (!wasCollapsed && sidebarCollapsed) {
+      manuallyHidden = true;
+      localStorage.setItem("sama-live_sidebar_manually_hidden", "true");
+      showSidebarHiddenMessage();
+    } else if (wasCollapsed && !sidebarCollapsed) {
+      manuallyHidden = false;
+      localStorage.setItem("sama-live_sidebar_manually_hidden", "false");
+    }
+    
     localStorage.setItem("sama-live_sidebar_collapsed", sidebarCollapsed);
     updateSidebarUI();
   };
 
   updateSidebarUI();
+
+  // Function to show sidebar hidden message
+  function showSidebarHiddenMessage() {
+    showMessage("👆 Click the '<' button to show sidebar", 5000);
+    
+    // Show tooltip on the show button
+    const sidebarToggle = $("#sidebarToggle");
+    if (sidebarToggle) {
+      sidebarToggle.classList.add('tooltip-active');
+      setTimeout(() => {
+        sidebarToggle.classList.remove('tooltip-active');
+      }, 5000);
+    }
+  }
 
   // Search with debouncing for smooth performance
   let searchTimeout;
@@ -2834,12 +2861,134 @@
   $("#dismissDisclaimer").onclick = () =>
     $("#disclaimer").classList.add("hidden");
 
-  // Volume persistences
-  video.addEventListener("volumechange", async () => {
-    state.volume = video.volume;
-    await window.api.setVolume(video.volume);
-  });
+// Volume persistences
 
-  // load
-  loadInitialData();
+// Auto-hide sidebar functionality
+let autoHideTimeout = null;
+let isVideoPlaying = false;
+let isAutoHideEnabled = false;
+const AUTO_HIDE_DELAY = 30000; // 30 seconds in milliseconds
+
+// Function to check if video is currently playing
+function isVideoCurrentlyPlaying() {
+  return !video.paused && !video.ended && state.current !== null;
+}
+
+// Function to show sidebar hidden message
+function showSidebarHiddenMessage() {
+  showMessage("👆 Click the '>' button to show sidebar", 5000);
+  
+  // Show tooltip on the show button
+  const sidebarToggle = $("#sidebarToggle");
+  if (sidebarToggle) {
+    sidebarToggle.classList.add('tooltip-active');
+    setTimeout(() => {
+      sidebarToggle.classList.remove('tooltip-active');
+    }, 5000);
+  }
+}
+
+// Function to auto-hide sidebar
+function autoHideSidebar() {
+  if (isVideoCurrentlyPlaying() && isAutoHideEnabled && !sidebarCollapsed) {
+    sidebarCollapsed = true;
+    manuallyHidden = false; // This was auto-hidden, not manual
+    localStorage.setItem("sama-live_sidebar_collapsed", sidebarCollapsed);
+    localStorage.setItem("sama-live_sidebar_manually_hidden", "false");
+    updateSidebarUI();
+    showSidebarHiddenMessage();
+    console.log("Sidebar auto-hidden due to inactivity");
+  }
+}
+
+// Function to reset auto-hide timer
+function resetAutoHideTimer() {
+  if (autoHideTimeout) {
+    clearTimeout(autoHideTimeout);
+  }
+  
+  if (isVideoCurrentlyPlaying() && isAutoHideEnabled && !sidebarCollapsed) {
+    autoHideTimeout = setTimeout(autoHideSidebar, AUTO_HIDE_DELAY);
+  }
+}
+
+// Function to start auto-hide monitoring
+function startAutoHideMonitoring() {
+  isAutoHideEnabled = true;
+  resetAutoHideTimer();
+}
+
+// Function to stop auto-hide monitoring
+function stopAutoHideMonitoring() {
+  isAutoHideEnabled = false;
+  if (autoHideTimeout) {
+    clearTimeout(autoHideTimeout);
+    autoHideTimeout = null;
+  }
+}
+
+// Monitor video playback state
+video.addEventListener("play", () => {
+  if (state.current) {
+    isVideoPlaying = true;
+    startAutoHideMonitoring();
+    console.log("Auto-hide monitoring started");
+  }
+});
+
+video.addEventListener("pause", () => {
+  isVideoPlaying = false;
+  stopAutoHideMonitoring();
+  console.log("Auto-hide monitoring stopped");
+});
+
+video.addEventListener("ended", () => {
+  isVideoPlaying = false;
+  stopAutoHideMonitoring();
+  console.log("Auto-hide monitoring stopped");
+});
+
+// Monitor user activity to reset timer (excluding mouse movement to prevent auto-show)
+const activityEvents = [
+  "mousedown", "keypress", "keydown", "keyup", 
+  "scroll", "touchstart", "touchmove"
+];
+
+function handleUserActivity() {
+  resetAutoHideTimer();
+  
+  // Don't auto-show sidebar if it was manually hidden
+  // Only auto-show if it was auto-hidden and user interacts
+  if (sidebarCollapsed && isVideoCurrentlyPlaying() && isAutoHideEnabled && !manuallyHidden) {
+    sidebarCollapsed = false;
+    localStorage.setItem("sama-live_sidebar_collapsed", sidebarCollapsed);
+    updateSidebarUI();
+    resetAutoHideTimer(); // Start timer again
+    console.log("Sidebar restored due to user activity");
+  }
+}
+
+// Add activity listeners (excluding click to avoid interfering with manual toggle)
+activityEvents.forEach(eventType => {
+  document.addEventListener(eventType, handleUserActivity, { passive: true });
+});
+
+// Update selectChannel function to handle auto-hide
+const originalSelectChannel = selectChannel;
+selectChannel = function(ch) {
+  originalSelectChannel(ch);
+  
+  // Stop auto-hide when switching channels
+  stopAutoHideMonitoring();
+  
+  // Start fresh monitoring after a short delay to allow video to load
+  setTimeout(() => {
+    if (isVideoCurrentlyPlaying()) {
+      startAutoHideMonitoring();
+    }
+  }, 2000);
+};
+
+// load
+loadInitialData();
 })();
