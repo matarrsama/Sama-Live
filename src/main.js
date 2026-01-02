@@ -132,9 +132,15 @@ function setupAutoUpdater() {
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = true;
 
-  // Check for updates every hour (3600000 ms)
+  // Check for updates immediately on startup
   console.log("🔍 Checking for updates...");
   autoUpdater.checkForUpdatesAndNotify();
+
+  // Set up hourly update checking (3600000 ms = 1 hour)
+  setInterval(() => {
+    console.log("🔍 Hourly update check...");
+    autoUpdater.checkForUpdatesAndNotify();
+  }, 3600000);
 
   // Event: Update available
   autoUpdater.on("update-available", (info) => {
@@ -667,21 +673,59 @@ ipcMain.handle("check-for-updates", async () => {
   }
 });
 
+let downloadController = null;
+let isDownloadActive = false;
+
 ipcMain.handle("start-update-download", async () => {
   try {
-    await autoUpdater.downloadUpdate();
+    // Create abort controller for this download
+    downloadController = new AbortController();
+    isDownloadActive = true;
+    
+    // Start the download with abort capability
+    const downloadPromise = autoUpdater.downloadUpdate();
+    
+    // Handle the download completion
+    downloadPromise
+      .then(() => {
+        isDownloadActive = false;
+        downloadController = null;
+      })
+      .catch((err) => {
+        isDownloadActive = false;
+        downloadController = null;
+        if (err.name !== 'AbortError') {
+          console.error("Download failed:", err);
+        }
+      });
+    
     return { ok: true };
   } catch (err) {
+    isDownloadActive = false;
+    downloadController = null;
     return { ok: false, error: err.message };
   }
 });
 
 ipcMain.handle("cancel-update-download", async () => {
   try {
-    // autoUpdater doesn't have a direct cancel method, but we can abort the download
-    // by stopping the download process. For now, we'll just log it.
-    console.log("Update download cancelled by user");
-    return { ok: true };
+    if (isDownloadActive && downloadController) {
+      // Abort the download
+      downloadController.abort();
+      isDownloadActive = false;
+      downloadController = null;
+      
+      console.log("Update download cancelled by user");
+      
+      // Reset autoUpdater state
+      autoUpdater.updateConfigPath = null;
+      autoUpdater.checkForUpdatesAndNotify();
+      
+      return { ok: true };
+    } else {
+      console.log("No active download to cancel");
+      return { ok: true };
+    }
   } catch (err) {
     return { ok: false, error: err.message };
   }

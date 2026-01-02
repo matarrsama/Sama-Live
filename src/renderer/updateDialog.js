@@ -6,6 +6,9 @@ class UpdateDialog {
     this.isUpdateDownloaded = false;
     this.updateVersion = null;
     this.setupListeners();
+    
+    // Check for pending updates on startup
+    this.checkForPendingUpdates();
   }
 
   setupListeners() {
@@ -86,8 +89,17 @@ class UpdateDialog {
       existingNotification.remove();
     }
 
+    // Auto-close the minimized indicator if it exists
+    const minimizedIndicator = document.querySelector(".update-minimized-indicator");
+    if (minimizedIndicator) {
+      minimizedIndicator.remove();
+    }
+
     this.isUpdateDownloaded = true;
     this.showInstallDownloadedButton();
+
+    // Save state that update is ready for install
+    localStorage.setItem("sama-live_update_ready", "true");
 
     const notification = document.createElement("div");
     notification.className = "update-notification update-notification-ready";
@@ -97,6 +109,7 @@ class UpdateDialog {
           <span class="update-icon">✅</span>
           <span class="update-title">Update Ready to Install</span>
           <button class="update-minimize-btn" title="Minimize" style="display: none;">↓</button>
+          <button class="update-close-btn">×</button>
         </div>
         <p class="update-message">The update has been downloaded. You can install it now or later.</p>
         <div class="update-actions">
@@ -110,20 +123,70 @@ class UpdateDialog {
     // Attach event listeners
     const installBtn = notification.querySelector(".btn-update-install");
     const laterBtn = notification.querySelector(".btn-update-install-later");
+    const closeBtn = notification.querySelector(".update-close-btn");
     const minimizeBtn = notification.querySelector(".update-minimize-btn");
 
     installBtn.addEventListener("click", () =>
       this.installUpdate(notification)
     );
-    laterBtn.addEventListener("click", () =>
-      this.dismissNotification(notification)
-    );
+    laterBtn.addEventListener("click", () => {
+      this.dismissNotification(notification);
+      this.showInstallUpdatesButton();
+    });
+
+    // Add close button handler
+    if (closeBtn) {
+      closeBtn.addEventListener("click", () => {
+        this.dismissNotification(notification);
+        this.showInstallUpdatesButton();
+      });
+    }
 
     if (minimizeBtn) {
       minimizeBtn.style.display = "flex";
       minimizeBtn.addEventListener("click", () =>
         this.minimizeDownloadWindow(notification)
       );
+    }
+  }
+
+  showInstallUpdatesButton() {
+    // Find the About page and add install updates button
+    const aboutFooter = document.querySelector(".about-footer");
+    if (aboutFooter && !document.getElementById("installUpdatesBtn")) {
+      const installBtn = document.createElement("button");
+      installBtn.id = "installUpdatesBtn";
+      installBtn.className = "about-link";
+      installBtn.innerHTML = `
+        <span class="about-icon">⬆️</span> Install Updates
+      `;
+      installBtn.style.color = "#4CAF50";
+      installBtn.style.fontWeight = "bold";
+      
+      // Insert after the check for updates button
+      const checkForUpdatesBtn = document.getElementById("checkForUpdates");
+      if (checkForUpdatesBtn) {
+        checkForUpdatesBtn.parentNode.insertBefore(installBtn, checkForUpdatesBtn.nextSibling);
+      } else {
+        aboutFooter.appendChild(installBtn);
+      }
+      
+      // Add click handler to show install window
+      installBtn.addEventListener("click", () => {
+        this.showUpdateReadyNotification();
+      });
+    }
+  }
+
+  checkForPendingUpdates() {
+    // Check if there's a pending update on app startup
+    const updateReady = localStorage.getItem("sama-live_update_ready");
+    if (updateReady === "true") {
+      console.log("🔄 Pending update detected, showing install window");
+      // Show the install window after a short delay to allow UI to load
+      setTimeout(() => {
+        this.showUpdateReadyNotification();
+      }, 1000);
     }
   }
 
@@ -225,7 +288,13 @@ class UpdateDialog {
 
   cancelDownload(notification) {
     this.isDownloading = false;
-    window.electronAPI.cancelUpdateDownload();
+    
+    // Call the cancel download handler
+    window.electronAPI.cancelUpdateDownload().then(() => {
+      console.log("Download cancelled successfully");
+    }).catch(err => {
+      console.error("Failed to cancel download:", err);
+    });
 
     // Reset the buttons and dismiss the notification
     const downloadBtn = notification.querySelector(".btn-update-download");
@@ -242,6 +311,15 @@ class UpdateDialog {
     if (progressContainer) {
       progressContainer.remove();
     }
+
+    // Remove any minimized indicator
+    const minimizedIndicator = document.querySelector(".update-minimized-indicator");
+    if (minimizedIndicator) {
+      minimizedIndicator.remove();
+    }
+
+    // Dismiss the notification
+    this.dismissNotification(notification);
   }
 
   resetDownloadButtons(notification, downloadBtn, laterBtn) {
@@ -257,6 +335,15 @@ class UpdateDialog {
   }
 
   installUpdate(notification) {
+    // Clear the update ready state
+    localStorage.removeItem("sama-live_update_ready");
+    
+    // Remove the install updates button if it exists
+    const installUpdatesBtn = document.getElementById("installUpdatesBtn");
+    if (installUpdatesBtn) {
+      installUpdatesBtn.remove();
+    }
+
     // Find the install button and show installation state
     const installBtn = notification
       ? notification.querySelector(".btn-update-install")
